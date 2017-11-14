@@ -1,0 +1,40 @@
+{
+  "name": "pskruntime",
+  "description": "pskruntime",
+  "version": "0.1.1",
+  "_id": "pskruntime@0.1.1",
+  "homepage": "https://github.com/PrivateSky/pskruntime.git",
+  "author": {
+    "name": "Alboaie Sinica",
+    "email": "salboaie@gmail.com"
+  },
+  "contributors": [
+    {
+      "name": "Alboaie Sinica",
+      "email": "salboaie@gmail.com"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PrivateSky/pskruntime.git"
+  },
+  "bugs": {
+    "email": "salboaie@gmail.com",
+    "url": "https://github.com/PrivateSky/pskruntime/issues"
+  },
+  "directories": {
+    "lib": "./lib"
+  },
+  "engines": {
+    "node": ">=0.10.0"
+  },
+  "main": "./lib/index.js",
+  "licenses": [
+    {
+      "type": "LGPL",
+      "url": "http://www.gnu.org/licenses/lgpl.html"
+    }
+  ],
+  "dependencies" : {
+  }
+}
