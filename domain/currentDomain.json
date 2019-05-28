@@ -1,0 +1,5 @@
+{
+  about: "configuration to allow automate the update of the code in domains during development (CSB cage or just private keys)",
+  domainName: "demo",
+  key: "secret"
+}
