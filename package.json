@@ -44,6 +44,7 @@
     "build": "node ./psknode/bin/scripts/pskbuild.js ./domain/build.json",
     "watch": "node ./psknode/bin/scripts/watcher.js --watch ./ --run ./psknode/bin/scripts/psknode.js --ignore=\"/engine/pskbuildtemp/,/builds/devel/,/tests/,/bin/\"",
     "start": "node ./bin/psknode.js",
-    "run-tests": "npm run build && node bin/scripts/testrunner.js"
+    "run-tests": "npm run build && node bin/scripts/testrunner.js",
+    "cmd": "node bin//terminal.js"
   }
 }
