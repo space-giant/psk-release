@@ -22,29 +22,23 @@
     "email": "salboaie@gmail.com",
     "url": "https://github.com/PrivateSky/pskruntime/issues"
   },
-  "directories": {
-    "lib": "./lib"
-  },
-  "engines": {
-    "node": ">=0.10.0"
-  },
-  "main": "./lib/index.js",
   "licenses": [
     {
       "type": "LGPL",
       "url": "http://www.gnu.org/licenses/lgpl.html"
-    },  {
+    },
+    {
       "type": "MIT"
     }
-
   ],
-  "dependencies" : {
+  "dependencies": {
+    "browserify": "^16.3.0"
   },
   "scripts": {
-    "build": "node ./psknode/bin/scripts/pskbuild.js ./domain/build.json",
     "watch": "node ./psknode/bin/scripts/watcher.js --watch ./ --run ./psknode/bin/scripts/psknode.js --ignore=\"/engine/pskbuildtemp/,/builds/devel/,/tests/,/bin/\"",
     "start": " node ./psknode/bin/scripts/psknode.js",
     "run-tests": "npm run build && node bin/scripts/testrunner.js",
-    "cmd": "node bin//terminal.js"
+    "cmd": "node bin//terminal.js",
+    "build": "node scripts/builder.js"
   }
 }
