@@ -43,11 +43,13 @@ if(process.argv[4]){
 var oldLog = console.log;
 console.log = function(...args){
 	oldLog.apply(this, ["["+spaceName+"]"].concat(args));
-}
+};
 
 console.log("pskRootFolder", pskRootFolder);
 
 console.log("Booting sandbox:", spaceName);
+
+process.env.PRIVATESKY_AGENT_NAME = spaceName;
 
 //TODO
 // ??? why we need this? what changed?
@@ -55,28 +57,32 @@ process.chdir(path.join(process.env.PRIVATESKY_TMP, "sandboxes", spaceName));
 
 require(path.join(process.cwd(), "bundles", "pskruntime.js"));
 require(path.join(process.cwd(), "bundles", "psknode.js"));
-require(path.join(process.cwd(), "bundles", "sandboxBase.js"));
 
 require('launcher');
 
 if(runInVM){
 
-	const IsolatedVM = require('../modules/pskisolates');
-	console.log('got isolated vm', process.env.PRIVATESKY_TMP);
-	const shimsBundle = fs.readFileSync(`./bundles/sandboxBase.js`);
-	console.log('shims bundle ready');
-	const pskruntime = fs.readFileSync('./builds/devel/pskruntime.js');
-	const pskNode = fs.readFileSync('./builds/devel/psknode.js');
+	const IsolatedVM = require('../../../modules/pskisolates');
+	const shimsBundle = fs.readFileSync(path.join(process.cwd(), "bundles", "sandboxBase.js"));
+	const pskruntime = fs.readFileSync(path.join(process.cwd(), "bundles", "pskruntime.js"));
+	const pskNode = fs.readFileSync(path.join(process.cwd(), "bundles", "psknode.js"));
 	const constitution = fs.readFileSync(constitutionPath);
 
-	IsolatedVM.getDefaultIsolate({shimsBundle: shimsBundle, browserifyBundles: [pskruntime, pskNode, constitution], config: IsolatedVM.IsolateConfig.defaultConfig}, (err, isolate) => {
+	$$.event('sandbox.start', {spaceName});
+
+	const config = IsolatedVM.IsolateConfig.defaultConfig;
+	config.logger = {
+		send ([logChannel, logObject]) {
+			$$.redirectLog(logChannel, logObject)
+		}
+	};
+
+	IsolatedVM.getDefaultIsolate({shimsBundle: shimsBundle, browserifyBundles: [pskruntime, pskNode, constitution], config: config}, (err, isolate) => {
 		if (err) {
 			throw err;
 		}
 
 		let folder = process.cwd();
-        const sand = {};
-    	const pubSub = require("soundpubsub").soundPubSub;
     	const mq = require("foldermq");
     	const path = require("path");
 
@@ -85,7 +91,7 @@ if(runInVM){
         outbound.setIPCChannel(process);
         outbound = outbound.getHandler();
 
-        var self = global;
+		const self = global;
 		isolate.globalSetSync('returnSwarm', function(swarm) {
             outbound.sendSwarmForExecution.call(self, JSON.parse(swarm));
 		});
@@ -112,6 +118,19 @@ if(runInVM){
 				global.$$.swarmsInstancesManager.revive_swarm(JSON.parse('${swarm}'));
 			`).catch(catchingErrors);
         });
+
+		setInterval(async () => {
+			const rawIsolate = isolate.rawIsolate;
+			const cpuTime = rawIsolate.cpuTime;
+			const wallTime = rawIsolate.wallTime;
+
+			const heapStatistics = await rawIsolate.getHeapStatistics();
+			const activeCPUTime = (cpuTime[0] + cpuTime[1] / 1e9) * 1000;
+			const totalCPUTime = (wallTime[0] + wallTime[1] / 1e9) * 1000;
+			const idleCPUTime = totalCPUTime - activeCPUTime;
+			$$.event('sandbox.metrics', {heapStatistics, activeCPUTime, totalCPUTime, idleCPUTime});
+
+		}, 10 * 1000) // 10 seconds
 
 	});
 
