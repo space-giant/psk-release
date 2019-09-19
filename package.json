@@ -32,7 +32,8 @@
     }
   ],
   "dependencies": {
-    "browserify": "^16.3.0"
+    "browserify": "^16.3.0",
+    "zeromq": "4.6.0"
   },
   "scripts": {
     "watch": "node ./psknode/bin/scripts/watcher.js --watch ./ --run ./psknode/bin/scripts/psknode.js --ignore=\"/engine/pskbuildtemp/,/builds/devel/,/tests/,/bin/\"",
