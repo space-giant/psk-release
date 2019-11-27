@@ -1,17 +1,22 @@
 const path = require("path");
+const argumentsParser = require(path.join(__dirname, './argumentsParserUtil'));
+
+require("../../core/utils/pingpongFork").enableLifeLine();
 
 const config = {
     port: 8080,
-    folder: '../tmp',
+    folder: path.join(__dirname, '../../../tmp'),
     sslFolder: path.resolve(__dirname, '../../conf/ssl')
 };
 
-require('../../bundles/pskruntime.js');
-require('../../bundles/virtualMQ.js');
-require('../../bundles/psknode');
-require('../../bundles/consoleTools');
+argumentsParser.populateConfig(config);
 
-const VirtualMQ = require('virtualmq').VirtualMQ;
+require(path.join(__dirname, '../../bundles/pskruntime.js'));
+require(path.join(__dirname, '../../bundles/virtualMQ.js'));
+require(path.join(__dirname, '../../bundles/psknode'));
+require(path.join(__dirname, '../../bundles/consoleTools'));
+
+const VirtualMQ = require('virtualmq');
 const fs = require('fs');
 
 function startServer(config) {
@@ -29,45 +34,14 @@ function startServer(config) {
         }
     }
 
-    const virtualMqConfig = {
-        listeningPort: Number.parseInt(config.port),
-        rootFolder: path.resolve(config.folder),
-        sslConfig: sslConfig
-    };
+    const listeningPort = Number.parseInt(config.port);
+    const rootFolder = path.resolve(config.folder);
 
-    const virtualMq = new VirtualMQ(virtualMqConfig);
-}
-
-const argv = Object.assign([], process.argv);
-argv.shift();
-argv.shift();
-
-for(let i = 0; i < argv.length; ++i) {
-    if(!argv[i].startsWith('--')) {
-        throw new Error(`Invalid argument ${argv[i]}`);
-    }
-
-    const argument = argv[i].substr(2);
-
-    const argumentPair = argument.split('=');
-    if(argumentPair.length > 1) {
-        editConfig(argumentPair[0], argumentPair[1]);
-    } else {
-        if(argv[i + 1].startsWith('--')) {
-            throw new Error(`Missing value for argument ${argument}`);
+    const virtualMq = VirtualMQ.createVirtualMQ(listeningPort, rootFolder, sslConfig, (err) => {
+        if(err) {
+            console.error(err);
         }
-
-        editConfig(argument, argv[i + 1]);
-        i += 1;
-    }
-}
-
-function editConfig(key, value) {
-    if(!config.hasOwnProperty(key)) {
-        throw new Error(`Invalid argument ${key}`);
-    }
-
-    config[key] = value;
+    });
 }
 
 startServer(config);

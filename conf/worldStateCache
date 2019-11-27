@@ -1,0 +1,16 @@
+{
+ "pskdb": {
+  "cset": {
+   "global.DomainReference/P2P4t8cXyjBtXf4JzT8vXsWHu1LvHnJMwwmAuKuVW8": "{\"meta\":{\"swarmTypeName\":\"global.DomainReference\",\"swarmId\":\"P2P4t8cXyjBtXf4JzT8vXsWHu1LvHnJMwwmAuKuVW8\",\"homeSecurityContext\":\"system\",\"command\":\"stored\"},\"publicVars\":{\"role\":\"system\",\"alias\":\"local\",\"addresses\":{},\"constitution\":\"../bundles/domain.js\",\"workspace\":\"../../conf\",\"remoteInterfaces\":{\"system\":\"http://127.0.0.1:8080\"},\"localInterfaces\":{},\"communicationInterfaces\":{\"system\":{\"virtualMQ\":\"http://127.0.0.1:8080\",\"zeroMQ\":\"tcp://127.0.0.1:5000\"}},\"maximumNumberOfWorkers\":10,\"workerStrategy\":\"threads\"},\"privateVars\":{}}"
+  },
+  "versions": {
+   "global.DomainReference/P2P4t8cXyjBtXf4JzT8vXsWHu1LvHnJMwwmAuKuVW8": 0
+  },
+  "currentPulse": 0,
+  "latestBlockHash": "290943b436fde1a80a221985171174731037d7d646822bc9f911b71f18e59dc8"
+ },
+ "keys": {
+  "global.DomainReference/aliases": "{\"local\":\"P2P4t8cXyjBtXf4JzT8vXsWHu1LvHnJMwwmAuKuVW8\"}"
+ },
+ "pulse": 0
+}

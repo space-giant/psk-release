@@ -1,0 +1,21 @@
+{
+ "blockset": {
+  "2d09754cf86c1473f1070df4a44cfb192663e206dc8982de6d60692f689ef95b": {
+   "swarmType": "global.DomainReference",
+   "input": {},
+   "output": {
+    "global.DomainReference/P2P4t8cXyjBtXf4JzT8vXsWHu1LvHnJMwwmAuKuVW8": "{\"meta\":{\"swarmTypeName\":\"global.DomainReference\",\"swarmId\":\"P2P4t8cXyjBtXf4JzT8vXsWHu1LvHnJMwwmAuKuVW8\",\"homeSecurityContext\":\"system\",\"command\":\"stored\"},\"publicVars\":{\"role\":\"system\",\"alias\":\"local\",\"addresses\":{},\"constitution\":\"../bundles/domain.js\",\"workspace\":\"../../conf\",\"remoteInterfaces\":{\"system\":\"http://127.0.0.1:8080\"},\"localInterfaces\":{},\"communicationInterfaces\":{\"system\":{\"virtualMQ\":\"http://127.0.0.1:8080\",\"zeroMQ\":\"tcp://127.0.0.1:5000\"}},\"maximumNumberOfWorkers\":10,\"workerStrategy\":\"threads\"},\"privateVars\":{}}"
+   },
+   "second": 24140,
+   "nanosecod": 39428476,
+   "transactionPulse": 0,
+   "digest": "2d09754cf86c1473f1070df4a44cfb192663e206dc8982de6d60692f689ef95b",
+   "signatures": [
+    "Signature from agent undefined should be here!"
+   ]
+  }
+ },
+ "pulse": 0,
+ "previous": "Genesis Block",
+ "hash": "290943b436fde1a80a221985171174731037d7d646822bc9f911b71f18e59dc8"
+}

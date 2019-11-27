@@ -1,2016 +1,1565 @@
-httpinteractRequire=(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({"/opt/new_swarm_engine_release/privatesky/builds/tmp/httpinteract_intermediar.js":[function(require,module,exports){
+testsRuntimeRequire=(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({"/opt/new_swarm_engine_release/privatesky/builds/tmp/testsRuntime_intermediar.js":[function(require,module,exports){
 (function (global){
-global.httpinteractLoadModules = function(){ 
+global.testsRuntimeLoadModules = function(){ 
 	$$.__runtimeModules["source-map-support"] = require("source-map-support");
 	$$.__runtimeModules["source-map"] = require("source-map");
 	$$.__runtimeModules["buffer-from"] = require("buffer-from");
-	$$.__runtimeModules["interact"] = require("interact");
-	$$.__runtimeModules["psk-http-client"] = require("psk-http-client");
-	$$.__runtimeModules["swarmutils"] = require("swarmutils");
-	$$.__runtimeModules["foldermq"] = require("foldermq");
+	$$.__runtimeModules["double-check"] = require("double-check");
 }
 if (false) {
-	httpinteractLoadModules();
+	testsRuntimeLoadModules();
 }; 
-global.httpinteractRequire = require;
+global.testsRuntimeRequire = require;
 if (typeof $$ !== "undefined") {            
-    $$.requireBundle("httpinteract");
+    $$.requireBundle("testsRuntime");
     };
     require('source-map-support').install({});
     
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
-},{"buffer-from":"buffer-from","foldermq":"foldermq","interact":"interact","psk-http-client":"psk-http-client","source-map":"source-map","source-map-support":"source-map-support","swarmutils":"swarmutils"}],"/opt/new_swarm_engine_release/privatesky/modules/foldermq/lib/folderMQ.js":[function(require,module,exports){
-const utils = require("swarmutils");
-const OwM = utils.OwM;
-var beesHealer = utils.beesHealer;
-var fs = require("fs");
-var path = require("path");
-
-
-//TODO: prevent a class of race condition type of errors by signaling with files metadata to the watcher when it is safe to consume
-
-function FolderMQ(folder, callback = () => {}){
-
-	if(typeof callback !== "function"){
-		throw new Error("Second parameter should be a callback function");
-	}
-
-	folder = path.normalize(folder);
-
-	fs.mkdir(folder, {recursive: true}, function(err, res){
-		fs.exists(folder, function(exists) {
-			if (exists) {
-				return callback(null, folder);
-			} else {
-				return callback(err);
-			}
-		});
-	});
-
-	function mkFileName(swarmRaw){
-		let meta = OwM.prototype.getMetaFrom(swarmRaw);
-		let name = `${folder}${path.sep}${meta.swarmId}.${meta.swarmTypeName}`;
-		const unique = meta.phaseId || $$.uidGenerator.safe_uuid();
-
-		name = name+`.${unique}`;
-		return path.normalize(name);
-	}
-
-	this.getHandler = function(){
-		if(producer){
-			throw new Error("Only one consumer is allowed!");
-		}
-		producer = true;
-		return {
-			sendSwarmSerialization: function(serialization, callback){
-				if(typeof callback !== "function"){
-					throw new Error("Second parameter should be a callback function");
-				}
-				writeFile(mkFileName(JSON.parse(serialization)), serialization, callback);
-			},
-			addStream : function(stream, callback){
-				if(typeof callback !== "function"){
-					throw new Error("Second parameter should be a callback function");
-				}
-
-				if(!stream || !stream.pipe || typeof stream.pipe !== "function"){
-					return callback(new Error("Something wrong happened"));
-				}
-
-				let swarm = "";
-				stream.on('data', (chunk) =>{
-					swarm += chunk;
-				});
-
-				stream.on("end", () => {
-					writeFile(mkFileName(JSON.parse(swarm)), swarm, callback);
-				});
-
-				stream.on("error", (err) =>{
-					callback(err);
-				});
-			},
-			addSwarm : function(swarm, callback){
-				if(!callback){
-					callback = $$.defaultErrorHandlingImplementation;
-				}else if(typeof callback !== "function"){
-					throw new Error("Second parameter should be a callback function");
-				}
-
-				beesHealer.asJSON(swarm,null, null, function(err, res){
-					if (err) {
-						console.log(err);
-					}
-					writeFile(mkFileName(res), J(res), callback);
-				});
-			},
-			sendSwarmForExecution: function(swarm, callback){
-				if(!callback){
-					callback = $$.defaultErrorHandlingImplementation;
-				}else if(typeof callback !== "function"){
-					throw new Error("Second parameter should be a callback function");
-				}
-
-				beesHealer.asJSON(swarm, OwM.prototype.getMetaFrom(swarm, "phaseName"), OwM.prototype.getMetaFrom(swarm, "args"), function(err, res){
-					if (err) {
-						console.log(err);
-					}
-					var file = mkFileName(res);
-					var content = JSON.stringify(res);
-
-					//if there are no more FD's for files to be written we retry.
-					function wrapper(error, result){
-						if(error){
-							console.log(`Caught an write error. Retry to write file [${file}]`);
-							setTimeout(()=>{
-								writeFile(file, content, wrapper);
-							}, 10);
-						}else{
-							return callback(error, result);
-						}
-					}
-
-					writeFile(file, content, wrapper);
-				});
-			}
-		};
-	};
-
-	var recipient;
-	this.setIPCChannel = function(processChannel){
-		if(processChannel && !processChannel.send || (typeof processChannel.send) != "function"){
-			throw new Error("Recipient is not instance of process/child_process or it was not spawned with IPC channel!");
-		}
-		recipient = processChannel;
-		if(consumer){
-			console.log(`Channel updated`);
-			(recipient || process).on("message", receiveEnvelope);
-		}
-	};
-
-
-	var consumedMessages = {};
-
-	function checkIfConsummed(name, message){
-		const shortName = path.basename(name);
-		const previousSaved = consumedMessages[shortName];
-		let result = false;
-		if(previousSaved && !previousSaved.localeCompare(message)){
-			result = true;
-		}
-		return result;
-	}
-
-	function save2History(envelope){
-		consumedMessages[path.basename(envelope.name)] = envelope.message;
-	}
-
-	function buildEnvelopeConfirmation(envelope, saveHistory){
-		if(saveHistory){
-			save2History(envelope);
-		}
-		return `Confirm envelope ${envelope.timestamp} sent to ${envelope.dest}`;
-	}
-
-	function buildEnvelope(name, message){
-		return {
-			dest: folder,
-			src: process.pid,
-			timestamp: new Date().getTime(),
-			message: message,
-			name: name
-		};
-	}
-
-	function receiveEnvelope(envelope){
-		if(!envelope || typeof envelope !== "object"){
-			return;
-		}
-		//console.log("received envelope", envelope, folder);
-
-		if(envelope.dest !== folder && folder.indexOf(envelope.dest)!== -1 && folder.length === envelope.dest+1){
-			console.log("This envelope is not for me!");
-			return;
-		}
-
-		let message = envelope.message;
-
-		if(callback){
-			//console.log("Sending confirmation", process.pid);
-			recipient.send(buildEnvelopeConfirmation(envelope, true));
-			consumer(null, JSON.parse(message));
-		}
-	}
-
-	this.registerAsIPCConsumer = function(callback){
-		if(typeof callback !== "function"){
-			throw new Error("The argument should be a callback function");
-		}
-		registeredAsIPCConsumer = true;
-		//will register as normal consumer in order to consume all existing messages but without setting the watcher
-		this.registerConsumer(callback, true, (watcher) => !watcher);
-
-		//console.log("Registered as IPC Consummer", );
-		(recipient || process).on("message", receiveEnvelope);
-	};
-
-	this.registerConsumer = function (callback, shouldDeleteAfterRead = true, shouldWaitForMore = (watcher) => true) {
-		if(typeof callback !== "function"){
-			throw new Error("First parameter should be a callback function");
-		}
-		if (consumer) {
-			throw new Error("Only one consumer is allowed! " + folder);
-		}
-
-		consumer = callback;
-
-		fs.mkdir(folder, {recursive: true}, function (err, res) {
-			if (err && (err.code !== 'EEXIST')) {
-				console.log(err);
-			}
-			consumeAllExisting(shouldDeleteAfterRead, shouldWaitForMore);
-		});
-	};
-
-	this.writeMessage = writeFile;
-
-	this.unlinkContent = function (messageId, callback) {
-		const messagePath = path.join(folder, messageId);
-
-		fs.unlink(messagePath, (err) => {
-			callback(err);
-		});
-	};
-
-	this.dispose = function(force){
-		if(typeof folder != "undefined"){
-			var files;
-			try{
-				files = fs.readdirSync(folder);
-			}catch(error){
-				//..
-			}
-
-			if(files && files.length > 0 && !force){
-				console.log("Disposing a channel that still has messages! Dir will not be removed!");
-				return false;
-			}else{
-				try{
-					fs.rmdirSync(folder);
-				}catch(err){
-					//..
-				}
-			}
-
-			folder = null;
-		}
-
-		if(producer){
-			//no need to do anything else
-		}
-
-		if(typeof consumer != "undefined"){
-			consumer = () => {};
-		}
-
-		if(watcher){
-			watcher.close();
-			watcher = null;
-		}
-
-		return true;
-	};
-
-
-	/* ---------------- protected  functions */
-	var consumer = null;
-	var registeredAsIPCConsumer = false;
-	var producer = null;
-
-	function buildPathForFile(filename){
-		return path.normalize(path.join(folder, filename));
-	}
-
-	function consumeMessage(filename, shouldDeleteAfterRead, callback) {
-		var fullPath = buildPathForFile(filename);
-
-		fs.readFile(fullPath, "utf8", function (err, data) {
-			if (!err) {
-				if (data !== "") {
-					try {
-						var message = JSON.parse(data);
-					} catch (error) {
-						console.log("Parsing error", error);
-						err = error;
-					}
-
-					if(checkIfConsummed(fullPath, data)){
-						//console.log(`message already consumed [${filename}]`);
-						return ;
-					}
-
-					if (shouldDeleteAfterRead) {
-
-						fs.unlink(fullPath, function (err, res) {
-							if (err) {throw err;};
-						});
-
-					}
-					return callback(err, message);
-				}
-			} else {
-				console.log("Consume error", err);
-				return callback(err);
-			}
-		});
-	}
-
-	function consumeAllExisting(shouldDeleteAfterRead, shouldWaitForMore) {
-
-		let currentFiles = [];
-
-		fs.readdir(folder, 'utf8', function (err, files) {
-			if (err) {
-				$$.errorHandler.error(err);
-				return;
-			}
-			currentFiles = files;
-			iterateAndConsume(files);
-
-		});
-
-		function startWatching(){
-			if (shouldWaitForMore(true)) {
-				watchFolder(shouldDeleteAfterRead, shouldWaitForMore);
-			}
-		}
-
-		function iterateAndConsume(files, currentIndex = 0) {
-			if (currentIndex === files.length) {
-				//console.log("start watching", new Date().getTime());
-				startWatching();
-				return;
-			}
-
-			if (path.extname(files[currentIndex]) !== in_progress) {
-				consumeMessage(files[currentIndex], shouldDeleteAfterRead, (err, data) => {
-					if (err) {
-						iterateAndConsume(files, ++currentIndex);
-						return;
-					}
-					consumer(null, data, path.basename(files[currentIndex]));
-					if (shouldWaitForMore()) {
-						iterateAndConsume(files, ++currentIndex);
-					}
-				});
-			} else {
-				iterateAndConsume(files, ++currentIndex);
-			}
-		}
-	}
-
-	function writeFile(filename, content, callback){
-		if(recipient){
-			var envelope = buildEnvelope(filename, content);
-			//console.log("Sending to", recipient.pid, recipient.ppid, "envelope", envelope);
-			recipient.send(envelope);
-			var confirmationReceived = false;
-
-			function receiveConfirmation(message){
-				if(message === buildEnvelopeConfirmation(envelope)){
-					//console.log("Received confirmation", recipient.pid);
-					confirmationReceived = true;
-					try{
-						recipient.off("message", receiveConfirmation);
-					}catch(err){
-						//...
-					}
-
-				}
-			}
-
-			recipient.on("message", receiveConfirmation);
-
-			setTimeout(()=>{
-				if(!confirmationReceived){
-					//console.log("No confirmation...", process.pid);
-					hidden_writeFile(filename, content, callback);
-				}else{
-					if(callback){
-						return callback(null, content);
-					}
-				}
-			}, 200);
-		}else{
-			hidden_writeFile(filename, content, callback);
-		}
-	}
-
-	const in_progress = ".in_progress";
-	function hidden_writeFile(filename, content, callback){
-		var tmpFilename = filename+in_progress;
-		try{
-			if(fs.existsSync(tmpFilename) || fs.existsSync(filename)){
-				console.log(new Error(`Overwriting file ${filename}`));
-			}
-			fs.writeFileSync(tmpFilename, content);
-			fs.renameSync(tmpFilename, filename);
-		}catch(err){
-			return callback(err);
-		}
-		callback(null, content);
-	}
-
-	var alreadyKnownChanges = {};
-
-	function alreadyFiredChanges(filename, change){
-		var res = false;
-		if(alreadyKnownChanges[filename]){
-			res = true;
-		}else{
-			alreadyKnownChanges[filename] = change;
-		}
-
-		return res;
-	}
-
-	function watchFolder(shouldDeleteAfterRead, shouldWaitForMore){
-
-		setTimeout(function(){
-			fs.readdir(folder, 'utf8', function (err, files) {
-				if (err) {
-					$$.errorHandler.error(err);
-					return;
-				}
-
-				for(var i=0; i<files.length; i++){
-					watchFilesHandler("change", files[i]);
-				}
-			});
-		}, 1000);
-
-		function watchFilesHandler(eventType, filename){
-			//console.log(`Got ${eventType} on ${filename}`);
-
-			if(!filename || path.extname(filename) === in_progress){
-				//caught a delete event of a file
-				//or
-				//file not ready to be consumed (in progress)
-				return;
-			}
-
-			var f = buildPathForFile(filename);
-			if(!fs.existsSync(f)){
-				//console.log("File not found", f);
-				return;
-			}
-
-			//console.log(`Preparing to consume ${filename}`);
-			if(!alreadyFiredChanges(filename, eventType)){
-				consumeMessage(filename, shouldDeleteAfterRead, (err, data) => {
-					//allow a read a the file
-					alreadyKnownChanges[filename] = undefined;
-
-					if (err) {
-						// ??
-						console.log("\nCaught an error", err);
-						return;
-					}
-
-					consumer(null, data, filename);
-
-
-					if (!shouldWaitForMore()) {
-						watcher.close();
-					}
-				});
-			}else{
-				console.log("Something happens...", filename);
-			}
-		}
-
-
-		const watcher = fs.watch(folder, watchFilesHandler);
-
-		const intervalTimer = setInterval(()=>{
-			fs.readdir(folder, 'utf8', function (err, files) {
-				if (err) {
-					$$.errorHandler.error(err);
-					return;
-				}
-
-				if(files.length > 0){
-					console.log(`\n\nFound ${files.length} files not consumed yet in ${folder}`, new Date().getTime(),"\n\n");
-					//faking a rename event trigger
-					watchFilesHandler("rename", files[0]);
-				}
-			});
-		}, 5000);
-	}
-}
-
-exports.getFolderQueue = function(folder, callback){
-	return new FolderMQ(folder, callback);
+},{"buffer-from":"buffer-from","double-check":"double-check","source-map":"source-map","source-map-support":"source-map-support"}],"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/runner.js":[function(require,module,exports){
+(function (Buffer,__dirname){
+const fs = require("fs");
+const path = require("path");
+const forker = require('child_process');
+
+const configuration_file_name = "double-check.json";
+
+let globToRegExp =  require("./utils/glob-to-regexp");
+
+const TAG = "[TEST_RUNNER]";
+const MAX_WORKERS = process.env['DOUBLE_CHECK_POOL_SIZE'] || 10;
+const RUNNER_VERBOSE = process.env['DOUBLE_CHECK_RUNNER_VERBOSE'] || true;
+
+const WORKER_PROCESS_STATES = {
+    READY: 'ready',
+    RUNNING: 'running',
+    FINISHED: 'finished'
 };
 
-},{"fs":false,"path":false,"swarmutils":"swarmutils"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/SoundPubSubMQBasedInteractionSpace.js":[function(require,module,exports){
-function MemoryMQInteractionSpace() {
-    var swarmInteract = require("./../swarmInteraction");
-    var swarmHandlersSubscribers = {};
+function TestRunner(){
 
-    function dispatchingSwarms(swarm){
-		setTimeout(function(){
-            var subsList = swarmHandlersSubscribers[swarm.meta.swarmId];
-            if(subsList){
-                for(var i=0; i<subsList.length; i++){
-                    var handler = subsList[i];
-                    handler(null, swarm);
-                }
-            }
-        }, 1);
-    }
-
-    var initialized = false;
-    function init(){
-		if(!initialized){
-			initialized = true;
-			$$.PSK_PubSub.subscribe($$.CONSTANTS.SWARM_FOR_EXECUTION, dispatchingSwarms);
-		}
-    }
-
-    var comm = {
-        startSwarm: function (swarmName, ctor, args) {
-			init();
-            return $$.swarm.start(swarmName, ctor, ...args);
-        },
-        continueSwarm: function (swarmHandler, swarmSerialisation, ctor, args) {
-			init();
-            swarmHandler[ctor].apply(swarmHandler, args);
-        },
-        on: function (swarmHandler, callback) {
-			init();
-            if(!swarmHandlersSubscribers[swarmHandler.getInnerValue().meta.swarmId]){
-				swarmHandlersSubscribers[swarmHandler.getInnerValue().meta.swarmId] = [ callback ];
-            }else{
-				swarmHandlersSubscribers[swarmHandler.getInnerValue().meta.swarmId].push(callback);
-            }
-        },
-        off: function (swarmHandler) {
-			if(swarmHandlersSubscribers[swarmHandler.getInnerValue().meta.swarmId]){
-				swarmHandlersSubscribers[swarmHandler.getInnerValue().meta.swarmId] = [];
-            }
-        }
-    };
-
-    return swarmInteract.newInteractionSpace(comm);
-
-}
-
-var space;
-module.exports.createInteractionSpace = function () {
-    if(!space){
-        space = new MemoryMQInteractionSpace();
-    }else{
-        console.log("MemoryMQInteractionSpace already created! Using same instance.");
-    }
-    return space;
-};
-},{"./../swarmInteraction":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/WebViewMQInteractionSpace.js":[function(require,module,exports){
-function WindowMQInteractionSpace(channelName, communicationWindow, secondCommunicationChannel){
-    var swarmInteract = require("./../swarmInteraction");
-    var childMessageMQ = require("./specificMQImpl/ChildWebViewMQ").createMQ(channelName, communicationWindow, secondCommunicationChannel);
-    var swarmInstances = {};
-
-    var comm = {
-        startSwarm: function (swarmName, ctor, args) {
-            var swarm = {meta:{
-                    swarmTypeName:swarmName,
-                    ctor:ctor,
-                    args:args
-                }};
-            childMessageMQ.produce(swarm);
-            return swarm;
-        },
-        continueSwarm: function (swarmHandler, swarmSerialisation, phaseName, args) {
-
-            var newSerialization = JSON.parse(JSON.stringify(swarmSerialisation));
-            newSerialization.meta.ctor = undefined;
-            newSerialization.meta.phaseName = phaseName;
-            newSerialization.meta.target = "iframe";
-            newSerialization.meta.args = args;
-            childMessageMQ.produce(newSerialization);
-        },
-        on: function (swarmHandler, callback) {
-            childMessageMQ.registerConsumer(callback);
-        },
-        off: function (swarmHandler) {
-
-        }
-    };
-
-
-    var space = swarmInteract.newInteractionSpace(comm);
-    this.startSwarm = function (name, ctor, ...args) {
-        return space.startSwarm(name, ctor, ...args);
-    };
-
-    this.init = function () {
-
-        childMessageMQ.registerConsumer(function (err, data) {
-            if (err) {
-                console.log(err);
-            }
-            else {
-                var swarm;
-                if(data && data.meta && data.meta.swarmId && swarmInstances[data.meta.swarmId]){
-                    swarm = swarmInstances[data.meta.swarmId];
-                    swarm.update(data);
-                    swarm[data.meta.phaseName].apply(swarm, data.meta.args);
-                }else{
-
-                    swarm = $$.swarm.start(data.meta.swarmTypeName, data.meta.ctor, ...data.meta.args);
-
-                    swarmInstances[swarm.getInnerValue().meta.swarmId] = swarm;
-
-                    swarm.onReturn(function(data){
-                        console.log("Swarm is finished");
-                        console.log(data);
-                    });
-                }
-            }
-        });
-        const readyEvt = {webViewIsReady: true};
-        parent.postMessage(JSON.stringify(readyEvt), "*");
-
-    };
-
-    function handler(message){
-        log("sending swarm ", message);
-        childMessageMQ.produce(message);
-    }
-
-    function filterInteractions(message){
-        log("checking if message is 'interaction' ", message);
-        return message && message.meta && message.meta.target && message.meta.target === "interaction";
-    }
-    //TODO fix this for nativeWebView
-
-    $$.PSK_PubSub.subscribe($$.CONSTANTS.SWARM_FOR_EXECUTION, handler, function(){return true;}, filterInteractions);
-
-    log("registering listener for handling interactions");
-
-    function log(...args){
-        args.unshift("[WindowMQInteractionSpace"+(window.frameElement ? "*": "")+"]" );
-        //console.log.apply(this, args);
-    }
-}
-
-module.exports.createInteractionSpace = function(channelName, communicationWindow, secondCommunicationChannel){
-    return new WindowMQInteractionSpace(channelName, communicationWindow, secondCommunicationChannel);
-};
-},{"./../swarmInteraction":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js","./specificMQImpl/ChildWebViewMQ":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWebViewMQ.js"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/WindowMQInteractionSpace.js":[function(require,module,exports){
-/*TODO
-For the moment I don't see any problems if it's not cryptographic safe.
-This version keeps  compatibility with mobile browsers/webviews.
- */
-function uuidv4() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
-
-function WindowMQInteractionSpace(channelName, communicationWindow) {
-    var swarmInteract = require("./../swarmInteraction");
-    var childMessageMQ = require("./specificMQImpl/ChildWndMQ").createMQ(channelName, communicationWindow);
-    var swarmInstances = {};
-
-    var comm = {
-        startSwarm: function (swarmName, ctor, args) {
-
-            var uniqueId = uuidv4();
-            var swarm = {
-                meta: {
-                    swarmTypeName: swarmName,
-                    ctor: ctor,
-                    args: args,
-                    requestId: uniqueId,
-                }
-            };
-            childMessageMQ.produce(swarm);
-            return swarm;
-        },
-        continueSwarm: function (swarmHandler, swarmSerialisation, phaseName, args) {
-
-            var newSerialization = JSON.parse(JSON.stringify(swarmSerialisation));
-            newSerialization.meta.ctor = undefined;
-            newSerialization.meta.phaseName = phaseName;
-            newSerialization.meta.target = "iframe";
-            newSerialization.meta.args = args;
-            childMessageMQ.produce(newSerialization);
-        },
-        on: function (swarmHandler, callback) {
-            childMessageMQ.registerCallback(swarmHandler.meta.requestId, callback);
-        },
-        off: function (swarmHandler) {
-            console.log("Function not implemented!");
-        }
-    };
-
-
-    var space = swarmInteract.newInteractionSpace(comm);
-    this.startSwarm = function (name, ctor, ...args) {
-        return space.startSwarm(name, ctor, ...args);
-    };
-
-    this.init = function () {
-
-        childMessageMQ.registerConsumer(function (err, data) {
-            if (err) {
-                console.log(err);
-            }
-            else {
-                var swarm;
-                if (data && data.meta && data.meta.swarmId && swarmInstances[data.meta.swarmId]) {
-                    swarm = swarmInstances[data.meta.swarmId];
-                    swarm.update(data);
-                    swarm[data.meta.phaseName].apply(swarm, data.meta.args);
-                } else {
-
-                    swarm = $$.swarm.start(data.meta.swarmTypeName, data.meta.ctor, ...data.meta.args);
-                    swarm.setMetadata("requestId", data.meta.requestId);
-                    swarmInstances[swarm.getInnerValue().meta.swarmId] = swarm;
-
-                    swarm.onReturn(function (data) {
-                        console.log("Swarm is finished");
-                        console.log(data);
-                    });
-                }
-            }
-        });
-        parent.postMessage({webViewIsReady: true}, "*");
-    };
-
-    function handler(message) {
-        log("sending swarm ", message);
-        childMessageMQ.produce(message);
-    }
-
-    function filterInteractions(message) {
-        log("checking if message is 'interaction' ", message);
-        return message && message.meta && message.meta.target && message.meta.target === "interaction";
-    }
-
-    $$.PSK_PubSub.subscribe($$.CONSTANTS.SWARM_FOR_EXECUTION, handler, function () {
-        return true;
-    }, filterInteractions);
-    log("registering listener for handling interactions");
-
-    function log(...args) {
-        args.unshift("[WindowMQInteractionSpace" + (window.frameElement ? "*" : "") + "]");
-        //console.log.apply(this, args);
-    }
-}
-
-module.exports.createInteractionSpace = function (channelName, communicationWindow) {
-    return new WindowMQInteractionSpace(channelName, communicationWindow);
-};
-
-},{"./../swarmInteraction":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js","./specificMQImpl/ChildWndMQ":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ.js"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/folderMQBasedInteractionSpace.js":[function(require,module,exports){
-var OwM = require("swarmutils").OwM;
-var swarmInteract = require("./../swarmInteraction");
-var folderMQ = require("foldermq");
-
-function FolderMQInteractionSpace(agent, targetFolder, returnFolder) {
-    var swarmHandlersSubscribers = {};
-    var queueHandler = null;
-    var responseQueue = null;
-
-    var queue = folderMQ.createQue(targetFolder, (err , result) => {
-        if(err){
-           throw err;
-        }
-    });
-
-    function createSwarmPack(swarmName, phaseName, ...args){
-        var swarm = new OwM();
-
-        swarm.setMeta("swarmId", $$.uidGenerator.safe_uuid());
-
-        swarm.setMeta("requestId", swarm.getMeta("swarmId"));
-        swarm.setMeta("swarmTypeName", swarmName);
-        swarm.setMeta("phaseName", phaseName);
-        swarm.setMeta("args", args);
-        swarm.setMeta("command", "executeSwarmPhase");
-        swarm.setMeta("target", agent);
-        swarm.setMeta("homeSecurityContext", returnFolder);
-
-        return swarm;
-    }
-
-    function dispatchingSwarms(err, swarm){
-        if (err) {
-            console.log(err);
-        }
-		setTimeout(function(){
-            var subsList = swarmHandlersSubscribers[swarm.meta.swarmId];
-            if(subsList){
-                for(var i=0; i<subsList.length; i++){
-                    let handler = subsList[i];
-                    handler(null, swarm);
-                }
-            }
-        }, 1);
-    }
-
-    function init(){
-        if(!queueHandler){
-            queueHandler = queue.getHandler();
-        }
-    }
-	
-	init();
-
-    function prepareToConsume(){
-        if(!responseQueue){
-            responseQueue = folderMQ.createQue(returnFolder);
-            responseQueue.registerConsumer(dispatchingSwarms);
-        }
-    }
-
-    var communication = {
-        startSwarm: function (swarmName, ctor, args) {
-            prepareToConsume();
-            var swarm = createSwarmPack(swarmName, ctor, ...args);
-            queueHandler.sendSwarmForExecution(swarm);
-            return swarm;
-        },
-        continueSwarm: function (swarmHandler, swarmSerialisation, ctor, ...args) {
-            try{
-                swarmHandler.update(swarmSerialisation);
-                swarmHandler[ctor].apply(swarmHandler, args);
-            }catch(err){
-                console.log(err);
-            }
-        },
-        on: function (swarmHandler, callback) {
-            prepareToConsume();
-
-            if(!swarmHandlersSubscribers[swarmHandler.meta.swarmId]){
-                swarmHandlersSubscribers[swarmHandler.meta.swarmId] = [];
-            }
-            swarmHandlersSubscribers[swarmHandler.meta.swarmId].push(callback);
-
-        },
-        off: function (swarmHandler) {
-            swarmHandlersSubscribers[swarmHandler.meta.swarmId] = [];
-        }
-    };
-
-    return swarmInteract.newInteractionSpace(communication);
-}
-
-var spaces = {};
-
-module.exports.createInteractionSpace = function (agent, targetFolder, returnFolder) {
-    var index = targetFolder+returnFolder;
-    if(!spaces[index]){
-        spaces[index] = new FolderMQInteractionSpace(agent, targetFolder, returnFolder);
-    }else{
-        console.log(`FolderMQ interaction space based on [${targetFolder}, ${returnFolder}] already exists!`);
-    }
-    return spaces[index];
-};
-},{"./../swarmInteraction":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js","foldermq":"foldermq","swarmutils":"swarmutils"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/httpInteractionSpace.js":[function(require,module,exports){
-require('psk-http-client');
-
-function HTTPInteractionSpace(alias, remoteEndPoint, agentUid, cryptoInfo) {
-    const swarmInteract = require("./../swarmInteraction");
-
-    let initialized = false;
-    function init(){
-        if(!initialized){
-            initialized = true;
-            $$.remote.createRequestManager();
-            $$.remote.newEndPoint(alias, remoteEndPoint, agentUid, cryptoInfo);
-        }
-    }
-
-    const comm = {
-        startSwarm: function (swarmName, ctor, args) {
-            init();
-            return $$.remote[alias].startSwarm(swarmName, ctor, ...args);
-        },
-        continueSwarm: function (swarmHandler, swarmSerialisation, ctor, args) {
-            return $$.remote[alias].continueSwarm(swarmSerialisation, ctor, args);
-        },
-        on: function (swarmHandler, callback) {
-            swarmHandler.on('*', callback);
-        },
-        off: function (swarmHandler) {
-            swarmHandler.off('*');
-        }
-    };
-
-    return swarmInteract.newInteractionSpace(comm);
-}
-
-module.exports.createInteractionSpace = function (alias, remoteEndPoint, agentUid, cryptoInfo) {
-    //singleton
-    return new HTTPInteractionSpace(alias, remoteEndPoint, agentUid, cryptoInfo);
-};
-},{"./../swarmInteraction":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js","psk-http-client":"psk-http-client"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWebViewMQ.js":[function(require,module,exports){
-(function (global){
-var channelsRegistry = {}; //keeps callbacks for consumers and windows references for producers
-var callbacksRegistry = {};
-
-function dispatchEvent(event) {
-    var swarm = JSON.parse(event.data);
-    if(swarm.meta){
-        var callback = callbacksRegistry[swarm.meta.channelName];
-        if (callback) {
-            return callback(null, swarm);
-        } else {
-            throw new Error("");
-        }
-    }
-
-}
-
-
-function ChildWndMQ(channelName, mainWindow, secondCommunicationChannel) {
-    //channel name is
-
-    channelsRegistry[channelName] = mainWindow;
-
-    this.produce = function (swarmMsg) {
-        swarmMsg.meta.channelName = channelName;
-        var message = {
-            meta:swarmMsg.meta,
-            publicVars:swarmMsg.publicVars,
-            privateVars:swarmMsg.privateVars
-        };
-
-        message.meta.args = message.meta.args.map(function (argument) {
-            if (argument instanceof Error) {
-                var error = {};
-                if (argument.message) {
-                    error["message"] = argument.message;
-                }
-                if (argument.code) {
-                    error["code"] = argument.code;
-                }
-                return error;
-            }
-            return argument;
-        });
-        mainWindow.postMessage(JSON.stringify(message), "*");
-    };
-
-    var consumer;
-
-    this.registerConsumer = function (callback, shouldDeleteAfterRead = true) {
-        if (typeof callback !== "function") {
-            throw new Error("First parameter should be a callback function");
-        }
-        if (consumer) {
-           // throw new Error("Only one consumer is allowed!");
-        }
-
-        consumer = callback;
-        callbacksRegistry[channelName] = consumer;
-
-        if (secondCommunicationChannel && typeof secondCommunicationChannel.addEventListener !== "undefined") {
-            secondCommunicationChannel.addEventListener("message", dispatchEvent);
-        }
-      };
-}
-
-
-module.exports.createMQ = function createMQ(channelName, wnd, secondCommunicationChannel){
-    return new ChildWndMQ(channelName, wnd, secondCommunicationChannel);
-};
-
-
-module.exports.initForSwarmingInChild = function(domainName){
-
-    var pubSub = $$.require("soundpubsub").soundPubSub;
-
-    var inbound = createMQ(domainName+"/inbound");
-    var outbound = createMQ(domainName+"/outbound");
-
-
-    inbound.registerConsumer(function(err, swarm){
-        if (err) {
-            console.log(err);
-        }
-        //restore and execute this tasty swarm
-        global.$$.swarmsInstancesManager.revive_swarm(swarm);
-    });
-
-    pubSub.subscribe($$.CONSTANTS.SWARM_FOR_EXECUTION, function(swarm){
-        outbound.sendSwarmForExecution(swarm);
-    });
-};
-
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ.js":[function(require,module,exports){
-(function (global){
-var channelsRegistry = {}; //keeps callbacks for consumers and windows references for producers
-var callbacksRegistry = {};
-var swarmCallbacks = {};
-
-function dispatchEvent(event) {
-
-    if (event.source !== window) {
-
-        var swarm = event.data;
-
-        if (swarm.meta) {
-            let callback;
-            if (!swarm.meta.requestId || !swarmCallbacks[swarm.meta.requestId]) {
-                callback = callbacksRegistry[swarm.meta.channelName];
-            }
-            else {
-                callback = swarmCallbacks[swarm.meta.requestId];
-            }
-
-            if (callback) {
-                return callback(null, swarm);
-            } else {
-                throw new Error("");
-            }
-
-        }
-    }
-}
-
-
-function ChildWndMQ(channelName, mainWindow) {
-    //channel name is
-
-    channelsRegistry[channelName] = mainWindow;
-
-    this.produce = function (swarmMsg) {
-        swarmMsg.meta.channelName = channelName;
-        var message = {
-            meta: swarmMsg.meta,
-            publicVars: swarmMsg.publicVars,
-            privateVars: swarmMsg.privateVars
-        };
-        //console.log(swarmMsg.getJSON());
-        //console.log(swarmMsg.valueOf());
-        message.meta.args = message.meta.args.map(function (argument) {
-            if (argument instanceof Error) {
-                var error = {};
-                if (argument.message) {
-                    error["message"] = argument.message;
-                }
-                if (argument.code) {
-                    error["code"] = argument.code;
-                }
-                return error;
-            }
-            return argument;
-        });
-        mainWindow.postMessage(message, "*");
-    };
-
-    var consumer;
-
-    this.registerConsumer = function (callback, shouldDeleteAfterRead = true) {
-        if (typeof callback !== "function") {
-            throw new Error("First parameter should be a callback function");
-        }
-        if (consumer) {
-            // throw new Error("Only one consumer is allowed!");
-        }
-
-        consumer = callback;
-        callbacksRegistry[channelName] = consumer;
-        mainWindow.addEventListener("message", dispatchEvent);
-    };
-
-    this.registerCallback = function (requestId, callback) {
-        swarmCallbacks[requestId] = callback;
-        callbacksRegistry[channelName] = callback;
-        mainWindow.addEventListener("message", dispatchEvent);
-    };
-
-}
-
-
-module.exports.createMQ = function createMQ(channelName, wnd) {
-    return new ChildWndMQ(channelName, wnd);
-};
-
-
-module.exports.initForSwarmingInChild = function (domainName) {
-
-    var pubSub = $$.require("soundpubsub").soundPubSub;
-
-    var inbound = createMQ(domainName + "/inbound");
-    var outbound = createMQ(domainName + "/outbound");
-
-
-    inbound.registerConsumer(function (err, swarm) {
-        if (err) {
-            console.log(err);
-        }
-        //restore and execute this tasty swarm
-        global.$$.swarmsInstancesManager.revive_swarm(swarm);
-    });
-
-    pubSub.subscribe($$.CONSTANTS.SWARM_FOR_EXECUTION, function (swarm) {
-        outbound.sendSwarmForExecution(swarm);
-    });
-};
-
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js":[function(require,module,exports){
-if (typeof $$ == "undefined") {
-    $$ = {};
-}
-
-function VirtualSwarm(innerObj, globalHandler){
-    let knownExtraProps = [ "swarm" ];
-
-    function buildHandler() {
-        var utility = {};
+    // Session object
+    function initializeSession() {
         return {
-            set: function (target, property, value, receiver) {
-                switch (true) {
-                    case target.privateVars && target.privateVars.hasOwnProperty(property):
-                        target.privateVars[property] = value;
-                        break;
-                    case target.publicVars && target.publicVars.hasOwnProperty(property):
-                        target.publicVars[property] = value;
-                        break;
-                    case target.hasOwnProperty(property):
-                        target[property] = value;
-                        break;
-                    case knownExtraProps.indexOf(property) === -1:
-                        if (!globalHandler.protected) {
-                            globalHandler.protected = {};
-                        }
-                        globalHandler.protected[property] = value;
-                        break;
-                    default:
-                        utility[property] = value;
-                }
-                return true;
+            testCount: 0,
+            currentTestIndex: 0,
+            processedTestCount: 0,
+            workers: {
+                running: 0,
+                terminated: 0
+            }
+        };
+    }
+
+    let defaultConfig = {
+        fileExt: ".js",                         // test file supported by extension
+        matchDirs: ["*"],
+        testDirs: process.cwd(),                // path to the root tests location
+        ignore: [".git"],
+        reports: {
+            basePath: process.cwd(),            // path where the reports will be saved
+            prefix: "Report-",                  // prefix for report files, filename pattern: [prefix]-{timestamp}{ext}
+            ext: ".txt"                         // report file extension
+        }
+    };
+
+    // Template structure for test reports.
+    let reportFileStructure = {
+        count: 0,
+        suites: new Set(),
+        passed: new Set(),
+        failed: new Set()
+    };
+
+    let config;
+
+    function init(cfg){
+
+        // no matter how and when runner is exiting first of all do a report print
+        let process_exit = process.exit;
+        process.exit = (...args)=>{
+            process.exit = process_exit;
+            doReports(()=>{
+                process.exit(...args);
+            });
+        };
+
+        process.on("SIGINT", process.exit);
+        //--------------------------------------------------------------------------------------
+
+        config = extend(defaultConfig, cfg);
+        debug("Starting config", config);
+
+        //the testTree holds the tree of directories and files descovered
+        this.testTree = {};
+        //sorted list of all test files discovered
+        this.testList = [];
+
+        this.session = initializeSession();
+
+        // create reports directory if not exist
+        if (!fs.existsSync(config.reports.basePath)){
+            fs.mkdirSync(config.reports.basePath);
+        }
+    }
+
+    function getDefaultNodeStructure() {
+        return  {
+            __meta: {
+                conf: null,
+                parent: null,
+                isDirectory: false
             },
-            get: function (target, property, receiver) {
-
-                switch (true) {
-                    case target.publicVars && target.publicVars.hasOwnProperty(property):
-                        return target.publicVars[property];
-                    case target.privateVars && target.privateVars.hasOwnProperty(property):
-                        return target.privateVars[property];
-                    case target.hasOwnProperty(property):
-                        return target[property];
-                    case utility.hasOwnProperty(property):
-                        return utility[property];
-                    case globalHandler.protected && globalHandler.protected.hasOwnProperty(property):
-                        return globalHandler.protected[property];
-                    default:
-                        return undefined;
-                }
-            }
+            data: {
+                name: null,
+                path: null,
+            },
+            result: {
+                state: WORKER_PROCESS_STATES.READY, // ready | running | terminated | timeout
+                pass: null,
+                executionTime: 0,
+                runs: 0,
+                asserts: [],
+                messages: []
+            },
+            items: null
         };
     }
 
-    return new Proxy(innerObj, buildHandler());
-}
-
-function SwarmInteraction(communicationInterface, swarmName, ctor, args) {
-
-    var swarmHandler = communicationInterface.startSwarm(swarmName, ctor, args);
-
-    this.on = function(description){
-        communicationInterface.on(swarmHandler, function(err, swarmSerialisation){
-            if (err) {
-                console.log(err);
-            }
-            let phase = description[swarmSerialisation.meta.phaseName];
-            let virtualSwarm = new VirtualSwarm(swarmSerialisation, swarmHandler);
-
-            if(!phase){
-                //TODO review and fix. Fix case when an interaction is started from another interaction
-                if(swarmHandler && (!swarmHandler.Target || swarmHandler.Target.swarmId !== swarmSerialisation.meta.swarmId)){
-                    console.log("Not my swarm!");
-                    return;
-                }
-                var interactPhaseErr =  new Error("Interact method "+swarmSerialisation.meta.phaseName+" was not found.");
-                if(description["onError"]){
-                    description["onError"].call(virtualSwarm, interactPhaseErr);
-                    return;
-                }
-                else{
-                    throw interactPhaseErr;
-                }
-            }
-
-            virtualSwarm.swarm = function(phaseName, ...args){
-                communicationInterface.continueSwarm(swarmHandler, swarmSerialisation, phaseName, args);
-            };
-
-            phase.apply(virtualSwarm, swarmSerialisation.meta.args);
-            if(virtualSwarm.meta.command === "asyncReturn"){
-                communicationInterface.off(swarmHandler);
-            }
-        });
-    };
-
-    this.onReturn = function(callback){
-        this.on({
-            __return__: callback
-        });
-    };
-}
-
-var abstractInteractionSpace = {
-    startSwarm: function (swarmName, ctor, args) {
-        throw new Error("Overwrite  SwarmInteraction.prototype.startSwarm");
-    },
-    resendSwarm: function (swarmInstance, swarmSerialisation, ctor, args) {
-        throw new Error("Overwrite  SwarmInteraction.prototype.continueSwarm ");
-    },
-    on: function (swarmInstance, phaseName, callback) {
-        throw new Error("Overwrite  SwarmInteraction.prototype.onSwarm");
-    },
-off: function (swarmInstance) {
-        throw new Error("Overwrite  SwarmInteraction.prototype.onSwarm");
-    }
-};
-
-module.exports.newInteractionSpace = function (communicationInterface) {
-
-    if(!communicationInterface) {
-        communicationInterface = abstractInteractionSpace ;
-    }
-    return {
-        startSwarm: function (swarmName, ctor, ...args) {
-            return new SwarmInteraction(communicationInterface, swarmName, ctor, args);
+    function discoverTestFiles(dir, parentConf) {
+        dir = path.resolve(dir);
+        const stat = fs.statSync(dir);
+        if(!stat.isDirectory()){
+            throw new Error(dir + " is not a directory!");
         }
-    };
-};
 
+        let currentConf = parentConf;
 
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-abstract-client.js":[function(require,module,exports){
-let SwarmPacker = require("swarmutils").SwarmPacker;
+        let currentNode = getDefaultNodeStructure();
+        currentNode.__meta.parent = path.dirname(dir);
+        currentNode.__meta.isDirectory = true;
 
-const receiveEndpoint = process.env.RECEIVE_ENDPOINT || "receive-message/";
-const sendEndpoint = process.env.SEND_ENDPOINT || "send-message/";
-const createChannelEndpoint = process.env.CREATE_CHANNEL_ENDPOINT || 'create-channel/';
-
-/**********************  utility class **********************************/
-function RequestManager(pollingTimeOut){
-    if(!pollingTimeOut){
-        pollingTimeOut = 1000; //1 second by default
-    }
-
-    const self = this;
-
-    function Request(endPoint, initialSwarm, delayedStart){
-        let onReturnCallbacks = [];
-        let onErrorCallbacks = [];
-        let onCallbacks = [];
-        const requestId = initialSwarm.meta.requestId;
-        initialSwarm = null;
-
-        this.getRequestId = function(){
-            return requestId;
-        };
-
-        this.on = function(phaseName, callback){
-            if(typeof phaseName != "string"  && typeof callback != "function"){
-                throw new Error("The first parameter should be a string and the second parameter should be a function");
-            }
-
-            onCallbacks.push({
-                callback:callback,
-                phase:phaseName
-            });
-
-            if(typeof delayedStart === "undefined"){
-                self.poll(endPoint, this);
-            }
-
-            return this;
-        };
-
-        this.onReturn = function(callback){
-            onReturnCallbacks.push(callback);
-            if(typeof delayedStart === "undefined"){
-                self.poll(endPoint, this);
-            }
-            return this;
-        };
-
-        this.onError = function(callback){
-            if(onErrorCallbacks.indexOf(callback)!==-1){
-                onErrorCallbacks.push(callback);
-            }else{
-                console.log("Error callback already registered!");
-            }
-        };
-
-        this.start = function(){
-            if(typeof delayedStart !== "undefined"){
-                self.poll(endPoint, this);
-            }
-        };
-
-        this.dispatch = function(err, result){
-            if(result instanceof ArrayBuffer) {
-                result = SwarmPacker.unpack(result);
-            }
-
-            result = typeof result === "string" ? JSON.parse(result) : result;
-
-            result = OwM.prototype.convert(result);
-            const resultReqId = result.getMeta("requestId");
-            const phaseName = result.getMeta("phaseName");
-            let onReturn = false;
-
-            if(resultReqId === requestId){
-                onReturnCallbacks.forEach(function(c){
-                    c(null, result);
-                    onReturn = true;
-                });
-                if(onReturn){
-                    onReturnCallbacks = [];
-                    onErrorCallbacks = [];
-                }
-
-                onCallbacks.forEach(function(i){
-                    //console.log("XXXXXXXX:", phaseName , i);
-                    if(phaseName === i.phase || i.phase === '*') {
-                        i.callback(err, result);
-                    }
-                });
-            }
-
-            if(onReturnCallbacks.length === 0 && onCallbacks.length === 0){
-                self.unpoll(endPoint, this);
-            }
-        };
-
-        this.dispatchError = function (err) {
-            for (let i = 0; i < onErrorCallbacks.length; i++) {
-                const errCb = onErrorCallbacks[i];
-                errCb(err);
-            }
-        };
-
-        this.off = function(){
-            self.unpoll(endPoint, this);
-        };
-    }
-
-    this.createRequest = function(remoteEndPoint, swarm, delayedStart){
-        return new Request(remoteEndPoint, swarm, delayedStart);
-    };
-
-    /* *************************** polling zone ****************************/
-
-    const pollSet = {};
-
-    const activeConnections = {};
-
-    this.poll = function(remoteEndPoint, request){
-        let requests = pollSet[remoteEndPoint];
-        if(!requests){
-            requests = {};
-            pollSet[remoteEndPoint] = requests;
-        }
-        requests[request.getRequestId()] = request;
-        pollingHandler();
-    };
-
-    this.unpoll = function(remoteEndPoint, request){
-        const requests = pollSet[remoteEndPoint];
-        if(requests){
-            delete requests[request.getRequestId()];
-            if(Object.keys(requests).length === 0){
-                delete pollSet[remoteEndPoint];
+        let files = fs.readdirSync(dir);
+        // first look for conf file
+        if(files.indexOf(configuration_file_name) !== -1) {
+            let fd = path.join(dir, configuration_file_name);
+            let conf = readConf(fd);
+            if(conf) {
+                currentNode.__meta.conf = conf;
+                currentConf = extend(currentConf, conf);
+                //currentConf = conf;
             }
         }
-        else {
-            console.log("Unpolling wrong request:",remoteEndPoint, request);
-        }
-    };
 
-    function createPollThread(remoteEndPoint){
-        function reArm(){
-            $$.remote.doHttpGet(remoteEndPoint, function(err, res){
-                let requests = pollSet[remoteEndPoint];
+        currentNode.data.name = path.basename(dir);
+        currentNode.data.path = dir;
+        currentNode.items = [];
 
-                if(err){
-                    for(const req_id in requests){
-                        if(!requests.hasOwnProperty(req_id)) {return;}
+        for(let i = 0, len = files.length; i < len; i++) {
+            let item = files[i];
 
-                        let err_handler = requests[req_id].dispatchError;
-                        if(err_handler){
-                            err_handler(err);
-                        }
-                    }
-                    activeConnections[remoteEndPoint] = false;
-                } else {
+            let fd = path.join(dir, item);
+            let stat = fs.statSync(fd);
+            let isDir = stat.isDirectory();
+            let isTestDir = validateAsTestDir(fd);
 
-                    for(const k in requests){
-                        if(!requests.hasOwnProperty(k)) {return;}
-
-                        requests[k].dispatch(null, res);
-                    }
-
-                    if(Object.keys(requests).length !== 0) {
-                        reArm();
-                    } else {
-                        delete activeConnections[remoteEndPoint];
-                        console.log("Ending polling for ", remoteEndPoint);
-                    }
-                }
-            });
-        }
-        reArm();
-    }
-
-    function pollingHandler(){
-        let setTimer = false;
-        for(const remoteEndPoint in pollSet){
-            if(!pollSet.hasOwnProperty(remoteEndPoint)) {return;}
-
-            if(!activeConnections[remoteEndPoint]){
-                createPollThread(remoteEndPoint);
-                activeConnections[remoteEndPoint] = true;
+            if(isDir && !isTestDir) {
+                continue; // ignore dirs that does not follow the naming rule for test dirs
             }
-            setTimer = true;
-        }
-        if(setTimer) {
-            setTimeout(pollingHandler, pollingTimeOut);
-        }
-    }
 
-    setTimeout( pollingHandler, pollingTimeOut);
-}
+            if(!isDir && item.match(configuration_file_name)){
+                continue; // already processed
+            }
 
-
-function extractDomainAgentDetails(url){
-    const vRegex = /([a-zA-Z0-9]*|.)*\/agent\/([a-zA-Z0-9]+(\/)*)+/g;
-
-    if(!url.match(vRegex)){
-        throw new Error("Invalid format. (Eg. domain[.subdomain]*/agent/[organisation/]*agentId)");
-    }
-
-    const devider = "/agent/";
-    let domain;
-    let agentUrl;
-
-    const splitPoint = url.indexOf(devider);
-    if(splitPoint !== -1){
-        domain = url.slice(0, splitPoint);
-        agentUrl = url.slice(splitPoint+devider.length);
-    }
-
-    return {domain, agentUrl};
-}
-
-function urlEndWithSlash(url){
-
-    if(url[url.length - 1] !== "/"){
-        url += "/";
-    }
-
-    return url;
-}
-
-const OwM = require("swarmutils").OwM;
-
-/********************** main APIs on working with remote end points **********************************/
-function PskHttpClient(remoteEndPoint, agentUid, options){
-    const baseOfRemoteEndPoint = remoteEndPoint; //remove last id
-    let channelInitialized = false;
-    let channelInitStarted = false;
-
-    remoteEndPoint = urlEndWithSlash(remoteEndPoint);
-
-    //domainInfo contains 2 members: domain (privateSky domain) and agentUrl
-    const domainInfo = extractDomainAgentDetails(agentUid);
-    let homeSecurityContext = domainInfo.agentUrl;
-    let returnRemoteEndPoint = remoteEndPoint;
-
-    if(options && typeof options.returnRemote != "undefined"){
-        returnRemoteEndPoint = options.returnRemote;
-    }
-
-    if(!options || options && (typeof options.uniqueId == "undefined" || options.uniqueId)){
-        homeSecurityContext += "_"+Math.random().toString(36).substr(2, 9);
-    }
-
-    returnRemoteEndPoint = urlEndWithSlash(returnRemoteEndPoint);
-
-    this.startSwarm = function(swarmName, phaseName, ...args){
-        const swarm = new OwM();
-        swarm.setMeta("swarmId", $$.uidGenerator.safe_uuid());
-        swarm.setMeta("requestId", swarm.getMeta("swarmId"));
-        swarm.setMeta("swarmTypeName", swarmName);
-        swarm.setMeta("phaseName", phaseName);
-        swarm.setMeta("args", args);
-        swarm.setMeta("command", "executeSwarmPhase");
-        swarm.setMeta("target", domainInfo.agentUrl);
-        swarm.setMeta("homeSecurityContext", getRemoteToSendMessage(returnRemoteEndPoint, homeSecurityContext));
-
-        const requestToBeReturned = $$.remote.requestManager.createRequest(getRemoteToReceiveMessage(returnRemoteEndPoint, homeSecurityContext), swarm, true);
-
-        if(!channelInitialized && channelInitStarted === false) {
-            channelInitStarted = true;
-            $$.remote.doHttpPut(getRemoteToCreateChannel(returnRemoteEndPoint, homeSecurityContext), 'someSignature', (err) => {
-                if(err && err.statusCode !== 409) {
-                    console.error(err, err.statusCode);
-                    requestToBeReturned.dispatchError(err);
-                    channelInitialized = false;
-                    return;
+            // exclude files based on glob patterns
+            if(currentConf) {
+                // currentConf['ignore'] - array of regExp
+                if(currentConf['ignore']) {
+                    const isMatch = isAnyMatch(currentConf['ignore'], item);
+                    if(isMatch) {continue;}
                 }
+            }
 
-                channelInitialized = true;
-                requestToBeReturned.start();
-                $$.remote.doHttpPost(getRemoteToSendMessage(remoteEndPoint, domainInfo.domain), SwarmPacker.pack(swarm), function (err, res) {
-                    if (err) {
-                        requestToBeReturned.dispatchError(err);
-                    }
-                });
-            });
+            let childNode = getDefaultNodeStructure();
+            childNode.__meta.conf = {};
+            childNode.__meta.isDirectory = isDir;
+            childNode.__meta.parent = path.dirname(fd);
+
+            if (isDir) {
+                let tempChildNode = discoverTestFiles(fd, currentConf);
+                childNode = Object.assign(childNode, tempChildNode);
+                currentNode.items.push(childNode);
+            }
+            else if(path.extname(fd) ===  config.fileExt){
+                childNode.__meta.conf.runs = currentConf['runs'] || 1;
+                childNode.__meta.conf.silent = currentConf['silent'];
+
+                childNode.data.name = item;
+                childNode.data.path = fd;
+                reportFileStructure.suites.add(childNode.__meta.parent);
+                currentNode.items.push(childNode);
+            }
+        }
+
+        return currentNode;
+    }
+
+    function readConf(confPath) {
+        var config = {};
+        try{
+            config = require(confPath);
+        } catch(error) {
+            console.error(error);
+        }
+
+        return config;
+    }
+
+    function validateAsTestDir(dir) {
+        if(!config || !config.matchDirs) {
+            throw new Error(`matchDirs is not defined on config ${JSON.stringify(config)} does not exist!`);
+        }
+
+       let isTestDir = isAnyMatch(config.matchDirs, dir);
+
+        return isTestDir;
+    }
+
+    function isAnyMatch(globExpArray, str) {
+        const hasMatch = function(globExp) {
+            const regex = globToRegExp(globExp);
+            return regex.test(str);
+        };
+
+        return globExpArray.some(hasMatch);
+    }
+
+    let launchTests = () => {
+
+        this.session.testCount = this.testList.length;
+
+        console.log(`Start launching tests (${this.session.testCount})...`);
+
+        reportFileStructure.startDate = new Date().getTime();
+        reportFileStructure.count = this.session.testCount;
+        if(this.session.testCount > 0) {
+            setInterval(scheduleWork, 100);
         } else {
-            requestToBeReturned.start();
-            $$.remote.doHttpPost(getRemoteToSendMessage(remoteEndPoint, domainInfo.domain), SwarmPacker.pack(swarm), function (err, res) {
-                if (err) {
-                    requestToBeReturned.dispatchError(err);
-                }
+            doReports();
+        }
+    };
+
+    let scheduleWork = () => {
+        //launching tests for each workers available
+        while(this.session.workers.running < MAX_WORKERS && this.session.currentTestIndex < this.session.testCount){
+            let test = this.testList[this.session.currentTestIndex];
+            launchTest(test);
+        }
+    };
+
+    let launchTest = (test) => {
+        this.session.workers.running++;
+
+        test.result.state = WORKER_PROCESS_STATES.RUNNING;
+
+        let env = process.env;
+
+        const cwd = test.__meta.parent;
+        console.log("Executing", test.data.path);
+        let worker = forker.fork(test.data.path, [], {
+                'cwd': cwd,
+                'env': env,
+                stdio: ["inherit", "pipe", 'pipe', 'ipc'],
+                silent: false
             });
+
+        worker.on("exit", onExitEventHandlerWrapper(test));
+        worker.on("message", onMessageEventHandlerWrapper(test));
+        worker.on("error", onErrorEventHandlerWrapper(test));
+        worker.stderr.on("data", messageCaughtOnStdErr(test));
+
+        debug(`Launching test ${test.data.name}, on worker pid[${worker.pid}] `);
+        console.log(`Progress: ${this.session.currentTestIndex+1} of ${this.session.testCount}`);
+
+        this.session.currentTestIndex++;
+
+        worker.stdout.on('data', function (dataBuffer) {
+            let content = dataBuffer.toString('utf8');
+            if (test.__meta.conf.silent) {
+                console.log(content);
+            }
+            test.result.messages.push(content);
+        }.bind(this));
+
+
+        var self = this;
+
+        function onMessageEventHandlerWrapper(test) {
+            return function (log) {
+                if (log.type === 'assert') {
+                    test.result.asserts.push(log);
+                } else {
+                    test.result.messages.push(log);
+                }
+            };
         }
 
-        return requestToBeReturned;
+        function onExitEventHandlerWrapper(test) {
+            return function (code, signal) {
+                //clearTimeout(worker.timerVar);
+                debug(`Test ${test.data.name} exit with code ${code}, signal ${signal} `);
+
+                test.result.state = WORKER_PROCESS_STATES.FINISHED;
+                self.session.processedTestCount++;
+                if (code === 0 && test.result.pass === null) {
+                    test.result.pass = true;
+                    reportFileStructure.passed.add(test);
+                } else {
+                    test.result.pass = false;
+                    reportFileStructure.failed.add(test);
+                    test.result.messages.push("Process finished with errors!",
+                        `Exit code: ${code} Signal: ${signal}`);
+                }
+
+                self.session.workers.running--;
+                self.session.workers.terminated++;
+
+                //scheduleWork();
+                checkWorkersStatus();
+            };
+        }
+
+        // this handler can be triggered when:
+        // 1. The process could not be spawned, or
+        // 2. The process could not be killed, or
+        // 3. Sending a message to the child process failed.
+        // IMPORTANT: The 'exit' event may or may not fire after an error has occurred!
+        function onErrorEventHandlerWrapper(test) {
+            return function (error) {
+                if(Buffer.isBuffer(error)){
+                    error = error.toString();
+                }
+                debug(`Worker ${worker.pid} - error event.`, test.data.name);
+                //debug(error);
+
+                test.result.pass = false;
+                test.result.messages.push(error);
+
+                reportFileStructure.failed.add(test);
+                self.session.workers.running--;
+                self.session.workers.terminated++;
+            };
+        }
+
+        function messageCaughtOnStdErr(test) {
+            return function (error) {
+                if(Buffer.isBuffer(error)){
+                    error = error.toString();
+                }
+                //debug(`Worker ${worker.pid} - error event.`, test.data.name);
+                //debug(error);
+
+                test.result.pass = false;
+                test.result.messages.push(error);
+
+                reportFileStructure.failed.add(test);
+            };
+        }
     };
 
-    this.continueSwarm = function(existingSwarm, phaseName, ...args){
-        const swarm = new OwM(existingSwarm);
-        swarm.setMeta("phaseName", phaseName);
-        swarm.setMeta("args", args);
-        swarm.setMeta("command", "executeSwarmPhase");
-        swarm.setMeta("target", domainInfo.agentUrl);
-        swarm.setMeta("homeSecurityContext", returnRemoteEndPoint+$$.remote.base64Encode(homeSecurityContext));
+    let checkWorkersStatus = ()=>{
+        let remaining = this.session.testCount - this.session.processedTestCount;
+        if(this.session.workers.running === 0 && remaining === 0) {
+            doReports();
+        }else{
+            console.log(`Testing still in progress... ${this.session.workers.running} workers busy and ${remaining} tests are waiting to finish.`);
+        }
+    };
 
-        $$.remote.doHttpPost(getRemoteToSendMessage(remoteEndPoint, domainInfo.domain), SwarmPacker.pack(swarm), function(err, res){
-            if(err){
-                console.log(err);
+    let reportsAllReadyPrinted = false;
+    let doReports = (cb) => {
+        if(reportsAllReadyPrinted){
+            if(cb){
+                cb();
             }
+           return;
+        }
+        reportsAllReadyPrinted = true;
+        //doing reports :D
+        //on console and html report please!
+        reportFileStructure.endDate = new Date().getTime();
+        reportFileStructure.runned = this.session.processedTestCount;
+
+        doConsoleReport();
+
+        doHTMLReport((err, res)=>{
+            if(cb){
+                cb(err, res);
+            }
+            this.callback(err, this.session);
         });
-        //return $$.remote.requestManager.createRequest(swarm.getMeta("homeSecurityContext"), swarm);
     };
 
-    const allCatchAlls = [];
-    let requestsCounter = 0;
+    let doConsoleReport = () =>{
+        console.log("\n\nResults\n==========================");
+        console.log(`Finish running ${this.session.processedTestCount} tests from a total of ${this.session.testCount}.`);
+        console.log(`\x1b[31m ${reportFileStructure.failed.size} \x1b[0mfailed tests and \x1b[32m ${reportFileStructure.passed.size} \x1b[0mpassed tests.`);
 
-    function CatchAll(swarmName, phaseName, callback){ //same interface as Request
-        const requestId = requestsCounter++;
-        this.getRequestId = function(){
-            return "swarmName" + "phaseName" + requestId;
-        };
+        const sortedTestResults = [...reportFileStructure.failed, ...reportFileStructure.passed];
+        const greenCheckbox = '\x1b[32m \u2714 \x1b[0m';
+        const redCross = '\x1b[31m \u274C \x1b[0m';
 
-        this.dispatch = function(err, result){
-            result = OwM.prototype.convert(result);
-            const currentPhaseName = result.getMeta("phaseName");
-            const currentSwarmName = result.getMeta("swarmTypeName");
-            if((currentSwarmName === swarmName || swarmName === '*') && (currentPhaseName === phaseName || phaseName === '*')) {
+        console.log("==========================\nSummary:");
+        for (const test of sortedTestResults) {
+            const passed = test.result.pass;
+
+            console.log(` ${passed ? greenCheckbox : redCross} ${test.data.name}`);
+            if(!passed){
+                console.log(`\t at (${test.data.path}:1:1)`);
+            }
+        }
+        console.log("==========================");
+    };
+
+    let doHTMLReport = (cb) => {
+        var folderName = path.resolve(__dirname);
+        fs.readFile(path.join(folderName,'/utils/report.html'), 'utf8', (err, res) => {
+            if (err) {
+                debug('An error occurred while reading the html report template file, with the following error: ' + JSON.stringify(err));
+                throw err;
+            }
+            let destination = path.join(process.cwd(), "testReport.html");
+            let summary = JSON.parse(JSON.stringify(reportFileStructure));
+            summary.failed = Array.from(reportFileStructure.failed);
+            summary.passed = Array.from(reportFileStructure.passed);
+            summary.suites = Array.from(reportFileStructure.suites);
+
+            let content = res.replace("</html>", `<script>\nprint(${JSON.stringify(summary)});\n</script>\n</html>`);
+            fs.writeFile(destination, content, 'utf8', (err) => {
+                if (err) {
+                    debug('An error occurred while writing the html report file, with the following error: ' + JSON.stringify(err));
+                    throw err;
+                }
+
+                debug(`Finished writing HTML Report to file://${destination}`);
+                if(cb){
+                    cb();
+                }
+            });
+        });
+    };
+
+    function debug(...args){
+        if(!RUNNER_VERBOSE){
+            return;
+        }
+
+        console.log(...args);
+    }
+
+    function extend(first, second) {
+        for (const key in second) {
+            if (!first.hasOwnProperty(key)) {
+                first[key] = second[key];
+            } else {
+                let val = second[key];
+                if(typeof first[key] === 'object') {
+                    val = extend(first[key], second[key]);
+                }
+                first[key] = val;
+            }
+        }
+
+        return first;
+    }
+
+    function testTreeToList(rootNode) {
+        var testList = [];
+
+        traverse(rootNode);
+
+        function traverse(node) {
+            if(!node.__meta.isDirectory || !node.items) {
+                return;
+            }
+
+            for(let i = 0, len = node.items.length; i < len; i++) {
+                const item = node.items[i];
+                if(item.__meta.isDirectory) {
+                    traverse(item);
+                } else {
+                    testList.push(item);
+                }
+            }
+        }
+
+        return testList;
+    }
+
+    /**
+     * Main entry point. It will start the flow runner flow.
+     * @param cfg {Object} - object containing settings such as conf file name, test dir.
+     * @param callback {Function} - handler(error, result) invoked when an error occurred or the runner has completed all jobs.
+     */
+    this.start = function(cfg, callback){
+
+        this.callback = function(err, result) {
+            if(err) {
+                debug("Sending error to the callback", err);
+            }
+
+            if(callback) {
                 return callback(err, result);
             }
         };
+
+        init.call(this, cfg);
+
+        console.log("Start discovering tests ...");
+        let testTree = [];
+        if(Array.isArray(config.testDirs)){
+            for(let i=0; i<config.testDirs.length; i++){
+                testTree = testTree.concat(discoverTestFiles(config.testDirs[i], config));
+            }
+        }else{
+            testTree = discoverTestFiles(config.testDirs, config);
+        }
+
+        this.testList = [];
+        for(let i=0; i<testTree.length; i++){
+            this.testList = this.testList.concat(testTreeToList(testTree[i]));
+        }
+
+        launchTests();
+    }
+}
+
+exports.init = function(sf) {
+    sf.testRunner = new TestRunner();
+}
+
+}).call(this,{"isBuffer":require("../../../node_modules/is-buffer/index.js")},"/modules/double-check/lib")
+
+},{"../../../node_modules/is-buffer/index.js":"/opt/new_swarm_engine_release/privatesky/node_modules/is-buffer/index.js","./utils/glob-to-regexp":"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/utils/glob-to-regexp.js","child_process":false,"fs":false,"path":false}],"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/standardAsserts.js":[function(require,module,exports){
+module.exports.init = function (sf, logger) {
+    /**
+     * Registering handler for failed asserts. The handler is doing logging and is throwing an error.
+     * @param explanation {String} - failing reason message.
+     */
+    let __failWasAlreadyGenerated = false;
+    let __assetsCounter = 0;
+    let beginWasCalled = false;
+
+
+    const timeoutUntilBegin = setTimeout(function () {
+        if (!beginWasCalled) {
+            sf.assert.begin("asset.begin was not called, the exit time for the test is automatically set to 2 seconds. asset.callback can increase this time");
+        }
+    }, 1000);
+
+
+    /**
+     * Registering assert for printing a message and asynchronously printing all logs from logger.dumpWhys.
+     * @param message {String} - message to be recorded
+     * @param cleanFunctions {Function} - cleaning function
+     * @param timeout {Number} - number of milliseconds for the timeout check. Default to 500ms.
+     */
+    sf.assert.addCheck('forceFailedTest', function (message, err) {
+        console.error("Test should fail because:", message, err);
+        __failWasAlreadyGenerated = true;
+    });
+
+    /**
+     * Registering assert for printing a message and asynchronously printing all logs from logger.dumpWhys.
+     * @param message {String} - message to be recorded
+     * @param cleanFunctions {Function} - cleaning function
+     * @param timeout {Number} - number of milliseconds for the timeout check. Default to 500ms.
+     */
+    sf.assert.addCheck('begin', function (message, cleanFunctions, timeout) {
+        //logger.recordAssert(message);
+        beginWasCalled = true;
+        console.log(message);
+        sf.assert.end(cleanFunctions, timeout, true);
+    });
+
+
+    function recordFail(...args) { //record fail only once
+        if (!__failWasAlreadyGenerated) {
+            __failWasAlreadyGenerated = true;
+            logger.recordAssert(...args);
+        }
     }
 
-    this.on = function(swarmName, phaseName, callback){
-        const c = new CatchAll(swarmName, phaseName, callback);
-        allCatchAlls.push({
-            s:swarmName,
-            p:phaseName,
-            c:c
-        });
+    function delayEnd(message, milliseconds) {
+        if (!beginWasCalled) {
+            clearTimeout(timeoutUntilBegin);
+            sf.assert.begin(message, null, milliseconds);
+        } else {
+            //console.log('Begin was called before the delay could be applied')
+        }
+    }
 
-        if(!channelInitialized) {
-            $$.remote.doHttpPut(getRemoteToCreateChannel(returnRemoteEndPoint, homeSecurityContext), 'someSignature', (err) => {
-                if(err) {
-                    if(err.statusCode !== 409) {
-                        channelInitialized = false;
-                        c.dispatch(err); // should this be here?
-                        return;
+    /**
+     * Registering assert for evaluating a value to null. If check fails, the assertFail is invoked.
+     * @param explanation {String} - failing reason message in case the assert fails
+     */
+    sf.exceptions.register('assertFail', function (explanation) {
+        const message = "Assert or invariant has failed " + (explanation ? explanation : "");
+        const err = new Error(message);
+        err.isFailedAssert = true;
+        recordFail('[Fail] ' + message, err, true);
+        throw err;
+    });
+
+    /**
+     * Registering assert for equality. If check fails, the assertFail is invoked.
+     * @param v1 {String|Number|Object} - first value
+     * @param v1 {String|Number|Object} - second value
+     * @param explanation {String} - failing reason message in case the assert fails.
+     */
+    sf.assert.addCheck('equal', function (v1, v2, explanation) {
+        if (v1 !== v2) {
+            if (!explanation) {
+                explanation = "Assertion failed: [" + v1 + " !== " + v2 + "]";
+            }
+            sf.exceptions.assertFail(explanation);
+        }
+    });
+
+    /**
+     * Registering assert for inequality. If check fails, the assertFail is invoked.
+     * @param v1 {String|Number|Object} - first value
+     * @param v1 {String|Number|Object} - second value
+     * @param explanation {String} - failing reason message in case the assert fails
+     */
+    sf.assert.addCheck('notEqual', function (v1, v2, explanation) {
+        if (v1 === v2) {
+            if (!explanation) {
+                explanation = " [" + v1 + " == " + v2 + "]";
+            }
+            sf.exceptions.assertFail(explanation);
+        }
+    });
+
+    /**
+     * Registering assert for evaluating an expression to true. If check fails, the assertFail is invoked.
+     * @param b {Boolean} - result of an expression
+     * @param explanation {String} - failing reason message in case the assert fails
+     */
+    sf.assert.addCheck('true', function (b, explanation) {
+        if (!b) {
+            if (!explanation) {
+                explanation = " expression is false but is expected to be true";
+            }
+            sf.exceptions.assertFail(explanation);
+        }
+    });
+
+    /**
+     * Registering assert for evaluating an expression to false. If check fails, the assertFail is invoked.
+     * @param b {Boolean} - result of an expression
+     * @param explanation {String} - failing reason message in case the assert fails
+     */
+    sf.assert.addCheck('false', function (b, explanation) {
+        if (b) {
+            if (!explanation) {
+                explanation = " expression is true but is expected to be false";
+            }
+            sf.exceptions.assertFail(explanation);
+        }
+    });
+
+    /**
+     * Registering assert for evaluating a value to null. If check fails, the assertFail is invoked.
+     * @param b {Boolean} - result of an expression
+     * @param explanation {String} - failing reason message in case the assert fails
+     */
+    sf.assert.addCheck('isNull', function (v1, explanation) {
+        if (v1 !== null) {
+            sf.exceptions.assertFail(explanation);
+        }
+    });
+
+    /**
+     * Registering assert for evaluating a value to be not null. If check fails, the assertFail is invoked.
+     * @param b {Boolean} - result of an expression
+     * @param explanation {String} - failing reason message in case the assert fails
+     */
+    sf.assert.addCheck('notNull', function (v1, explanation) {
+        if (v1 === null && typeof v1 === "object") {
+            sf.exceptions.assertFail(explanation);
+        }
+    });
+
+    /**
+     * Checks if all properties of the second object are own properties of the first object.
+     * @param firstObj {Object} - first object
+     * @param secondObj{Object} - second object
+     * @returns {boolean} - returns true, if the check has passed or false otherwise.
+     */
+    function objectHasFields(firstObj, secondObj) {
+        for (let field in secondObj) {
+            if (firstObj.hasOwnProperty(field)) {
+                if (firstObj[field] !== secondObj[field]) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function objectsAreEqual(firstObj, secondObj) {
+        let areEqual = true;
+        if (firstObj !== secondObj) {
+            if (typeof firstObj !== typeof secondObj) {
+                areEqual = false;
+            } else if (Array.isArray(firstObj) && Array.isArray(secondObj)) {
+                firstObj.sort();
+                secondObj.sort();
+                if (firstObj.length !== secondObj.length) {
+                    areEqual = false;
+                } else {
+                    for (let i = 0; i < firstObj.length; ++i) {
+                        if (!objectsAreEqual(firstObj[i], secondObj[i])) {
+                            areEqual = false;
+                            break;
+                        }
                     }
                 }
-
-                channelInitialized = true;
-                $$.remote.requestManager.poll(getRemoteToReceiveMessage(remoteEndPoint, domainInfo.domain) , c);
-            });
-        } else {
-            $$.remote.requestManager.poll(getRemoteToReceiveMessage(remoteEndPoint, domainInfo.domain) , c);
-        }
-
-    };
-
-    this.off = function(swarmName, phaseName){
-        allCatchAlls.forEach(function(ca){
-            if((ca.s === swarmName || swarmName === '*') && (phaseName === ca.p || phaseName === '*')){
-                $$.remote.requestManager.unpoll(getRemoteToReceiveMessage(remoteEndPoint, domainInfo.domain), ca.c);
-            }
-        });
-    };
-
-    this.uploadCSB = function(cryptoUid, binaryData, callback){
-        $$.remote.doHttpPost(baseOfRemoteEndPoint + "/CSB/" + cryptoUid, binaryData, callback);
-    };
-
-    this.downloadCSB = function(cryptoUid, callback){
-        $$.remote.doHttpGet(baseOfRemoteEndPoint + "/CSB/" + cryptoUid, callback);
-    };
-
-    function getRemoteToReceiveMessage(baseUrl, domain){
-        return [urlEndWithSlash(baseUrl), receiveEndpoint, $$.remote.base64Encode(domain)].join("");
-    }
-
-    function getRemoteToSendMessage(baseUrl, domain){
-        return [urlEndWithSlash(baseUrl), sendEndpoint, $$.remote.base64Encode(domain)].join("");
-    }
-
-    function getRemoteToCreateChannel(baseUrl, domain) {
-        return [urlEndWithSlash(baseUrl), createChannelEndpoint, $$.remote.base64Encode(domain)].join("");
-
-    }
-}
-
-/********************** initialisation stuff **********************************/
-if (typeof $$ === "undefined") {
-    $$ = {};
-}
-
-if (typeof  $$.remote === "undefined") {
-    $$.remote = {};
-    $$.remote.createRequestManager = function(timeOut){
-        $$.remote.requestManager = new RequestManager(timeOut);
-    };
-
-
-    $$.remote.cryptoProvider = null;
-    $$.remote.newEndPoint = function(alias, remoteEndPoint, agentUid, options){
-        if(alias === "newRemoteEndPoint" || alias === "requestManager" || alias === "cryptoProvider"){
-            console.log("PskHttpClient Unsafe alias name:", alias);
-            return null;
-        }
-
-        $$.remote[alias] = new PskHttpClient(remoteEndPoint, agentUid, options);
-    };
-
-
-    $$.remote.doHttpPost = function (url, data, callback){
-        throw new Error("Overwrite this!");
-    };
-
-    $$.remote.doHttpPut = function (url, data, callback){
-        throw new Error("Overwrite this!");
-    };
-
-    $$.remote.doHttpGet = function doHttpGet(url, callback){
-        throw new Error("Overwrite this!");
-    };
-
-    $$.remote.base64Encode = function base64Encode(stringToEncode){
-        throw new Error("Overwrite this!");
-    };
-
-    $$.remote.base64Decode = function base64Decode(encodedString){
-        throw new Error("Overwrite this!");
-    };
-}
-
-/*  interface
-function CryptoProvider(){
-
-    this.generateSafeUid = function(){
-
-    }
-
-    this.signSwarm = function(swarm, agent){
-
-    }
-} */
-
-},{"swarmutils":"swarmutils"}],"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-browser-client.js":[function(require,module,exports){
-(function (Buffer){
-function generateMethodForRequestWithData(httpMethod) {
-    return function (url, data, callback) {
-        const xhr = new XMLHttpRequest();
-
-        xhr.onload = function () {
-            if (xhr.readyState === 4 && (xhr.status >= 200 && xhr.status < 300)) {
-                const data = xhr.response;
-                callback(null, data);
+            } else if ((typeof firstObj === 'function' && typeof secondObj === 'function') ||
+                (firstObj instanceof Date && secondObj instanceof Date) ||
+                (firstObj instanceof RegExp && secondObj instanceof RegExp) ||
+                (firstObj instanceof String && secondObj instanceof String) ||
+                (firstObj instanceof Number && secondObj instanceof Number)) {
+                areEqual = firstObj.toString() === secondObj.toString();
+            } else if (typeof firstObj === 'object' && typeof secondObj === 'object') {
+                areEqual = objectHasFields(firstObj, secondObj);
+                // isNaN(undefined) returns true
+            } else if (isNaN(firstObj) && isNaN(secondObj) && typeof firstObj === 'number' && typeof secondObj === 'number') {
+                areEqual = true;
             } else {
-                if(xhr.status>=400){
-                    const error = new Error("An error occured. StatusCode: " + xhr.status);
-                    callback({error: error, statusCode: xhr.status});
+                areEqual = false;
+            }
+        }
+
+        return areEqual;
+    }
+
+    /**
+     * Registering assert for evaluating if all properties of the second object are own properties of the first object.
+     * If check fails, the assertFail is invoked.
+     * @param firstObj {Object} - first object
+     * @param secondObj{Object} - second object
+     * @param explanation {String} - failing reason message in case the assert fails
+     */
+    sf.assert.addCheck("objectHasFields", function (firstObj, secondObj, explanation) {
+        if (!objectHasFields(firstObj, secondObj)) {
+            sf.exceptions.assertFail(explanation);
+        }
+    });
+
+    /**
+     * Registering assert for evaluating if all element from the second array are present in the first array.
+     * Deep comparison between the elements of the array is used.
+     * If check fails, the assertFail is invoked.
+     * @param firstArray {Array}- first array
+     * @param secondArray {Array} - second array
+     * @param explanation {String} - failing reason message in case the assert fails
+     */
+    sf.assert.addCheck("arraysMatch", function (firstArray, secondArray, explanation) {
+        if (firstArray.length !== secondArray.length) {
+            sf.exceptions.assertFail(explanation);
+        } else {
+            const result = objectsAreEqual(firstArray, secondArray);
+            // const arraysDontMatch = secondArray.every(element => firstArray.indexOf(element) !== -1);
+            // let arraysDontMatch = secondArray.some(function (expectedElement) {
+            //     let found = firstArray.some(function(resultElement){
+            //         return objectHasFields(resultElement,expectedElement);
+            //     });
+            //     return found === false;
+            // });
+
+            if (!result) {
+                sf.exceptions.assertFail(explanation);
+            }
+        }
+    });
+
+    // added mainly for test purposes, better test frameworks like mocha could be much better
+
+    /**
+     * Registering assert for checking if a function is failing.
+     * If the function is throwing an exception, the test is passed or failed otherwise.
+     * @param testName {String} - test name or description
+     * @param func {Function} - function to be invoked
+     */
+    sf.assert.addCheck('fail', function (testName, func) {
+        try {
+            func();
+            recordFail("[Fail] " + testName);
+        } catch (err) {
+            logger.recordAssert("[Pass] " + testName);
+        }
+    });
+
+    /**
+     * Registering assert for checking if a function is executed with no exceptions.
+     * If the function is not throwing any exception, the test is passed or failed otherwise.
+     * @param testName {String} - test name or description
+     * @param func {Function} - function to be invoked
+     */
+    sf.assert.addCheck('pass', function (testName, func) {
+        try {
+            func();
+            logger.recordAssert("[Pass] " + testName);
+        } catch (err) {
+            recordFail("[Fail] " + testName, err.stack);
+        }
+    });
+
+    /**
+     * Alias for the pass assert.
+     */
+    sf.assert.alias('test', 'pass');
+
+    /**
+     * Registering assert for checking if a callback function is executed before timeout is reached without any exceptions.
+     * If the function is throwing any exception or the timeout is reached, the test is failed or passed otherwise.
+     * @param testName {String} - test name or description
+     * @param func {Function} - function to be invoked
+     * @param timeout {Number} - number of milliseconds for the timeout check. Default to 500ms.
+     */
+    sf.assert.addCheck('callback', function (testName, func, timeout) {
+
+        if (!func || typeof func != "function") {
+            throw new Error("Wrong usage of assert.callback!");
+        }
+
+        if (!timeout) {
+            timeout = 500;
+        }
+
+        __assetsCounter++;
+
+        let passed = false;
+
+        function callback() {
+            __assetsCounter--;
+            if (!passed) {
+                passed = true;
+                logger.recordAssert("[Pass] " + testName);
+                successTest();
+            } else {
+                recordFail("[Fail (multiple calls)] " + testName);
+            }
+        }
+
+        setTimeout(successTest, timeout);
+        delayEnd(testName, timeout + 100);
+
+        try {
+            func(callback);
+        } catch (err) {
+            recordFail("[Fail] " + testName, err, true);
+        }
+
+        function successTest(force) {
+            if (!passed) {
+                logger.recordAssert("[Fail Timeout] " + testName);
+            }
+        }
+
+
+    });
+
+    /**
+     * Registering assert for checking if an array of callback functions are executed in a waterfall manner,
+     * before timeout is reached without any exceptions.
+     * If any of the functions is throwing any exception or the timeout is reached, the test is failed or passed otherwise.
+     * @param testName {String} - test name or description
+     * @param func {Function} - function to be invoked
+     * @param timeout {Number} - number of milliseconds for the timeout check. Default to 500ms.
+     */
+    sf.assert.addCheck('steps', function (testName, arr, timeout) {
+        if (!timeout) {
+            timeout = 500;
+        }
+
+        let currentStep = 0;
+        let passed = false;
+
+        function next() {
+            if (currentStep === arr.length) {
+                passed = true;
+                logger.recordAssert("[Pass] " + testName);
+                return;
+            }
+
+            const func = arr[currentStep];
+            currentStep++;
+            try {
+                func(next);
+            } catch (err) {
+                recordFail("[Fail] " + testName + " [at step " + currentStep + "]", err);
+            }
+        }
+
+        function successTest(force) {
+            if (!passed) {
+                recordFail("[Fail Timeout] " + testName + " [at step " + currentStep + "]");
+            }
+        }
+
+        setTimeout(successTest, timeout);
+        // delayEnd(testName, timeout + 100);
+        next();
+    });
+
+    /**
+     * Alias for the steps assert.
+     */
+    sf.assert.alias('waterfall', 'steps');
+
+
+    let cleaningArray = [];
+    /**
+     * Registering a cleaning function
+     * @param func {Function} - function to be invoked
+     */
+    sf.assert.addCheck('addCleaningFunction', function (func) {
+        cleaningArray.push(func);
+    });
+
+    /**
+     * Registering a cleaning function
+     * @param func {Function} - function to be invoked
+     */
+    sf.assert.addCheck('disableCleanings', function (func) {
+        cleaningArray = [];
+    });
+
+    sf.assert.addCheck('hashesAreEqual', function (hash1, hash2) {
+        if (!Array.isArray(hash1) && !Array.isArray(hash2)) {
+            return hash1 === hash2;
+        }
+
+        if (!Array.isArray(hash1) || !Array.isArray(hash2)) {
+            return false;
+        }
+
+        hash1.sort();
+        hash2.sort();
+        for (let i in hash1) {
+            if (hash1[i] !== hash2[i]) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    /**
+     * Registering assert for asynchronously printing all execution summary from logger.dumpWhys.
+     * @param message {String} - message to be recorded
+     * @param timeout {Number} - number of milliseconds for the timeout check. Default to 500ms.
+     */
+    sf.assert.addCheck('end', function (cleaningFunction, timeout, silence) {
+        if (!timeout) {
+            timeout = 1000;
+        }
+
+        function handler() {
+            if (logger.dumpWhys) {
+                logger.dumpWhys().forEach(function (c) {
+                    const executionSummary = c.getExecutionSummary();
+                    console.log(JSON.stringify(executionSummary, null, 4));
+                });
+            }
+
+            if (!silence) {
+                console.log("Forcing exit after", timeout, "ms");
+            }
+
+            setTimeout(function () {
+                if (__failWasAlreadyGenerated || __assetsCounter != 0) {
+                    process.exit(1);
                 } else {
-                    console.log(`Status code ${xhr.status} received, response is ignored.`);
+                    process.exit(0);
+                }
+            }, 1000);
+
+            cleaningArray.map(function (func) {
+                func();
+            });
+            if (cleaningFunction) {
+                cleaningFunction();
+            }
+        }
+
+        setTimeout(handler, timeout);
+    });
+
+
+};
+},{}],"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/standardChecks.js":[function(require,module,exports){
+/*
+    checks are like asserts but are intended to be used in production code to help debugging and signaling wrong behaviours
+
+ */
+
+exports.init = function(sf){
+    sf.exceptions.register('checkFail', function(explanation, err){
+        var stack;
+        if(err){
+            stack = err.stack;
+        }
+        console.log("Check failed ", explanation, stack);
+    });
+
+    sf.check.addCheck('equal', function(v1 , v2, explanation){
+
+        if(v1 !== v2){
+            if(!explanation){
+                explanation =  " ["+ v1 + " != " + v2 + "]";
+            }
+
+            sf.exceptions.checkFail(explanation);
+        }
+    });
+
+
+    sf.check.addCheck('true', function(b, explanation){
+        if(!b){
+            if(!explanation){
+                explanation =  " expression is false but is expected to be true";
+            }
+
+            sf.exceptions.checkFail(explanation);
+        }
+    });
+
+
+    sf.check.addCheck('false', function(b, explanation){
+        if(b){
+            if(!explanation){
+                explanation =  " expression is true but is expected to be false";
+            }
+
+            sf.exceptions.checkFail(explanation);
+        }
+    });
+
+    sf.check.addCheck('notequal', function(v1 , v2, explanation){
+        if(v1 == v2){
+            if(!explanation){
+                explanation =  " ["+ v1 + " == " + v2 + "]";
+            }
+            sf.exceptions.checkFail(explanation);
+        }
+    });
+
+
+    /*
+        added mainly for test purposes, better test frameworks like mocha could be much better :)
+    */
+    sf.check.addCheck('fail', function(testName ,func){
+        try{
+            func();
+            console.log("[Fail] " + testName );
+        } catch(err){
+            console.log("[Pass] " + testName );
+        }
+    });
+
+
+    sf.check.addCheck('pass', function(testName ,func){
+        try{
+            func();
+            console.log("[Pass] " + testName );
+        } catch(err){
+            console.log("[Fail] " + testName  ,  err.stack);
+        }
+    });
+
+
+    sf.check.alias('test','pass');
+
+
+    sf.check.addCheck('callback', function(testName ,func, timeout){
+        if(!timeout){
+            timeout = 500;
+        }
+        var passed = false;
+        function callback(){
+            if(!passed){
+                passed = true;
+                console.log("[Pass] " + testName );
+                SuccessTest();
+            } else {
+                console.log("[Fail (multiple calls)] " + testName );
+            }
+        }
+        try{
+            func(callback);
+        } catch(err){
+            console.log("[Fail] " + testName  ,  err.stack);
+        }
+
+        function SuccessTest(force){
+            if(!passed){
+                console.log("[Fail Timeout] " + testName );
+            }
+        }
+
+        setTimeout(SuccessTest, timeout);
+    });
+
+
+    sf.check.addCheck('steps', function(testName , arr, timeout){
+        var  currentStep = 0;
+        var passed = false;
+        if(!timeout){
+            timeout = 500;
+        }
+
+        function next(){
+            if(currentStep === arr.length){
+                passed = true;
+                console.log("[Pass] " + testName );
+                return ;
+            }
+            var func = arr[currentStep];
+            currentStep++;
+            try{
+                func(next);
+            } catch(err){
+                console.log("[Fail] " + testName  ,"\n\t" , err.stack + "\n\t" , " [at step ", currentStep + "]");
+            }
+        }
+
+        function SuccessTest(force){
+            if(!passed){
+                console.log("[Fail Timeout] " + testName + "\n\t" , " [at step ", currentStep+ "]");
+            }
+        }
+
+        setTimeout(SuccessTest, timeout);
+        next();
+    });
+
+    sf.check.alias('waterfall','steps');
+    sf.check.alias('notEqual','notequal');
+
+    sf.check.addCheck('end', function(timeOut, silence){
+        if(!timeOut){
+            timeOut = 1000;
+        }
+
+        setTimeout(function(){
+            if(!silence){
+                console.log("Forcing exit after", timeOut, "ms");
+            }
+            process.exit(0);
+        }, timeOut);
+    });
+
+
+    sf.check.addCheck('begin', function(message, timeOut){
+        console.log(message);
+        sf.check.end(timeOut, true);
+    });
+
+
+};
+},{}],"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/standardExceptions.js":[function(require,module,exports){
+exports.init = function(sf){
+    /**
+     * Registering unknown exception handler.
+     */
+    sf.exceptions.register('unknown', function(explanation){
+        explanation = explanation || "";
+        const message = "Unknown exception" + explanation;
+        throw(message);
+    });
+
+    /**
+     * Registering resend exception handler.
+     */
+    sf.exceptions.register('resend', function(exceptions){
+        throw(exceptions);
+    });
+
+    /**
+     * Registering notImplemented exception handler.
+     */
+    sf.exceptions.register('notImplemented', function(explanation){
+        explanation = explanation || "";
+        const message = "notImplemented exception" + explanation;
+        throw(message);
+    });
+
+    /**
+     * Registering security exception handler.
+     */
+    sf.exceptions.register('security', function(explanation){
+        explanation = explanation || "";
+        const message = "security exception" + explanation;
+        throw(message);
+    });
+
+    /**
+     * Registering duplicateDependency exception handler.
+     */
+    sf.exceptions.register('duplicateDependency', function(variable){
+        variable = variable || "";
+        const message = "duplicateDependency exception" + variable;
+        throw(message);
+    });
+};
+},{}],"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/standardLogs.js":[function(require,module,exports){
+const LOG_LEVELS = {
+    HARD_ERROR: 0,  // system level critical error: hardError
+    ERROR: 1,  // potentially causing user's data loosing error: error
+    ASSERT_FAIL: 1,  // an assert fails
+    LOG_ERROR: 2,  // minor annoyance, recoverable error:   logError
+    UX_ERROR: 3,  // user experience causing issues error:  uxError
+    WARN: 4,  // warning,possible isues but somehow unclear behaviour: warn
+    INFO: 5,  // store general info about the system working: info
+    DEBUG: 6,  // system level debug: debug
+    LOCAL_DEBUG: 7,  // local node/service debug: ldebug
+    USER_DEBUG: 8,  // user level debug; udebug
+    DEV_DEBUG: 9,  // development time debug: ddebug
+    WHYS: 10, // whyLog for code reasoning
+    TEST_RESULT: 11, // testResult to log running tests
+};
+
+exports.init = function (sf) {
+
+    /**
+     * Records log messages from various use cases.
+     * @param record {String} - log message.
+     */
+    sf.logger.record = function (record) {
+        const triggerStrings = ["pskruntime", "double-check", "psklogger", "standardGlobalSymbols"];
+        let displayOnConsole = true;
+        if (process.send) {
+            process.send(record);
+            displayOnConsole = false;
+        }
+
+        function removeLines(str, nb) {
+            function removeLine(str,  force) {
+                let pos = str.indexOf("\n");
+                let willBeRemoved = str.slice(0, pos);
+                if (!force) {
+                    let foundMatch = false;
+                    for(let i=0; i< triggerStrings.length;i++){
+                        let item = triggerStrings[i];
+                        if (willBeRemoved.indexOf(item) != -1) {
+                            foundMatch = true;
+                        }
+                    }
+                    if (!foundMatch) {
+                        throw foundMatch;
+                    }
+                }
+                return str.slice(pos + 1, str.length);
+            }
+
+            let ret = str;
+            for (let v = 0; v < nb; v++) {
+                try {
+                    ret = removeLine(ret, v==0);
+                } catch (err) {
+                    // nothing... exit for
                 }
             }
+            return "Stack:\n"+ret;
+        }
+
+        if (displayOnConsole) {
+            //const prettyLog = JSON.stringify(record, null, 2);
+            //console.log(prettyLog);
+            console.log(record.message);
+            if (record.stack) {
+                var pos = record.stack.indexOf("\n");
+                var message = record.stack.slice(0, pos);
+                if(record.level<=LOG_LEVELS.ERROR){
+                    console.error(message);
+                    console.error(removeLines(record.stack, 3));
+                } else {
+                    console.log(message);
+                    console.log(removeLines(record.stack, 3));
+                }
+            }
+        }
+    };
+
+    /**
+     * Adding case for logging system level critical errors.
+     */
+    sf.logger.addCase('hardError', function (message, exception, args, pos, data) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.HARD_ERROR, 'systemError', message, exception, true, args, pos, data));
+    }, [
+        {
+            'message': 'explanation'
+        }
+    ]);
+
+    /**
+     * Adding case for logging potentially causing user's data loosing errors.
+     */
+    sf.logger.addCase('error', function (message, exception, args, pos, data) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.ERROR, 'error', message, exception, true, args, pos, data));
+    }, [
+        {
+            'message': 'explanation'
+        },
+        {
+            'exception': 'exception'
+        }
+    ]);
+
+    /**
+     * Adding case for logging minor annoyance, recoverable errors.
+     */
+    sf.logger.addCase('logError', function (message, exception, args, pos, data) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.LOG_ERROR, 'logError', message, exception, true, args, pos, data));
+    }, [
+        {
+            'message': 'explanation'
+        },
+        {
+            'exception': 'exception'
+        }
+    ]);
+
+    /**
+     * Adding case for logging user experience causing issues errors.
+     */
+    sf.logger.addCase('uxError', function (message) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.UX_ERROR, 'uxError', message, null, false));
+    }, [
+        {
+            'message': 'explanation'
+        }
+    ]);
+
+    /**
+     * Adding case for logging throttling messages.
+     */
+    sf.logger.addCase('throttling', function (message) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.WARN, 'throttling', message, null, false));
+    }, [
+        {
+            'message': 'explanation'
+        }
+    ]);
+
+    /**
+     * Adding case for logging warning, possible issues, but somehow unclear behaviours.
+     */
+    sf.logger.addCase('warning', function (message) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.WARN, 'warning', message, null, false, arguments, 0));
+    }, [
+        {
+            'message': 'explanation'
+        }
+    ]);
+
+    sf.logger.alias('warn', 'warning');
+
+    /**
+     * Adding case for logging general info about the system working.
+     */
+    sf.logger.addCase('info', function (message) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.INFO, 'info', message, null, false, arguments, 0));
+    }, [
+        {
+            'message': 'explanation'
+        }
+    ]);
+
+    /**
+     * Adding case for logging system level debug messages.
+     */
+    sf.logger.addCase('debug', function (message) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.DEBUG, 'debug', message, null, false, arguments, 0));
+    }, [
+        {
+            'message': 'explanation'
+        }
+    ]);
+
+
+    /**
+     * Adding case for logging local node/service debug messages.
+     */
+    sf.logger.addCase('ldebug', function (message) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.LOCAL_DEBUG, 'ldebug', message, null, false, arguments, 0));
+    }, [
+        {
+            'message': 'explanation'
+        }
+    ]);
+
+    /**
+     * Adding case for logging user level debug messages.
+     */
+    sf.logger.addCase('udebug', function (message) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.USER_DEBUG, 'udebug', message, null, false, arguments, 0));
+    }, [
+        {
+            'message': 'explanation'
+        }
+    ]);
+
+    /**
+     * Adding case for logging development debug messages.
+     */
+    sf.logger.addCase('devel', function (message) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.DEV_DEBUG, 'devel', message, null, false, arguments, 0));
+    }, [
+        {
+            'message': 'explanation'
+        }
+    ]);
+
+    /**
+     * Adding case for logging "whys" reasoning messages.
+     */
+    sf.logger.addCase("logWhy", function (logOnlyCurrentWhyContext) {
+        sf.logger.record(createDebugRecord(LOG_LEVELS.WHYS, 'logwhy', undefined, undefined, undefined, undefined, undefined, undefined, logOnlyCurrentWhyContext));
+    });
+
+    /**
+     * Adding case for logging asserts messages to running tests.
+     */
+    sf.logger.addCase("recordAssert", function (message, error, showStack) {
+        if(error || showStack){
+            sf.logger.record(createDebugRecord(LOG_LEVELS.ASSERT_FAIL, 'assert', message, error, showStack));
+        } else {
+            sf.logger.record(createDebugRecord(LOG_LEVELS.TEST_RESULT, 'assert', message, error, showStack));
+        }
+    });
+
+    /**
+     * Generic method to create structured debug records based on the log level.
+     * @param level {Number} - number from 1-11, used to identify the level of attention that a log entry should get from operations point of view
+     * @param type {String} - identifier name for log type
+     * @param message {String} - description of the debug record
+     * @param exception {String} - exception details if any
+     * @param saveStack {Boolean} - if set to true, the exception call stack will be added to the debug record
+     * @param args {Array} - arguments of the caller function
+     * @param pos {Number} - position
+     * @param data {String|Number|Array|Object} - payload information
+     * @param logOnlyCurrentWhyContext - if whys is enabled, only the current context will be logged
+     * @returns Debug record model {Object} with the following fields:
+     * [required]: level: *, type: *, timestamp: number, message: *, data: * and
+     * [optional]: stack: *, exception: *, args: *, whyLog: *
+     */
+    function createDebugRecord(level, type, message, exception, saveStack, args, pos, data, logOnlyCurrentWhyContext) {
+
+        var ret = {
+            level: level,
+            type: type,
+            timestamp: (new Date()).getTime(),
+            message: message
         };
 
-        xhr.open(httpMethod, url, true);
-        //xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-
-        if(data && data.pipe && typeof data.pipe === "function"){
-            const buffers = [];
-            data.on("data", function(data) {
-                buffers.push(data);
-            });
-            data.on("end", function() {
-                const actualContents = Buffer.concat(buffers);
-                xhr.send(actualContents);
-            });
+        if(data){
+            ret.data = data;
         }
-        else {
-            if(ArrayBuffer.isView(data) || data instanceof ArrayBuffer) {
-                xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+        if (saveStack) {
+            var stack = '';
+            if (exception) {
+                stack = exception.stack;
+            } else {
+                stack = (new Error()).stack;
             }
-
-            xhr.send(data);
+            ret.stack = stack;
         }
-    };
-}
 
+        if (exception) {
+            ret.exception = exception.message;
+        }
 
-$$.remote.doHttpPost = generateMethodForRequestWithData('POST');
+        if (args) {
+            ret.args = JSON.parse(JSON.stringify(args));
+        }
 
-$$.remote.doHttpPut = generateMethodForRequestWithData('PUT');
-
-
-$$.remote.doHttpGet = function doHttpGet(url, callback) {
-
-    var xhr = new XMLHttpRequest();
-
-    xhr.onreadystatechange = function () {
-        //check if headers were received and if any action should be performed before receiving data
-        if (xhr.readyState === 2) {
-            var contentType = xhr.getResponseHeader("Content-Type");
-            if (contentType === "application/octet-stream") {
-                xhr.responseType = 'arraybuffer';
+        if (process.env.RUN_WITH_WHYS) {
+            var why = require('whys');
+            if (logOnlyCurrentWhyContext) {
+                ret['whyLog'] = why.getGlobalCurrentContext().getExecutionSummary();
+            } else {
+                ret['whyLog'] = why.getAllContexts().map(function (context) {
+                    return context.getExecutionSummary();
+                });
             }
         }
-    };
-
-    xhr.onload = function () {
-
-        if (xhr.readyState === 4 && xhr.status == "200") {
-            var contentType = xhr.getResponseHeader("Content-Type");
-
-            if(contentType==="application/octet-stream"){
-                let responseBuffer = this.response;
-                callback(null, responseBuffer);
-            }
-            else{
-                callback(null, xhr.response);
-            }
-
-        } else {
-            callback(new Error("An error occured. StatusCode: " + xhr.status));
-        }
-    };
-
-    xhr.open("GET", url);
-    xhr.send();
-};
-
-
-function CryptoProvider(){
-
-    this.generateSafeUid = function(){
-        let uid = "";
-        var array = new Uint32Array(10);
-        window.crypto.getRandomValues(array);
-
-
-        for (var i = 0; i < array.length; i++) {
-            uid += array[i].toString(16);
-        }
-
-        return uid;
+        return ret;
     }
 
-    this.signSwarm = function(swarm, agent){
-        swarm.meta.signature = agent;
+}
+;
+
+
+},{"whys":false}],"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/utils/glob-to-regexp.js":[function(require,module,exports){
+
+// globToRegExp turns a UNIX glob expression into a RegEx expression.
+//  Supports all simple glob patterns. Examples: *.ext, /foo/*, ../../path, ^foo.*
+// - single character matching, matching ranges of characters etc. group matching are no supported
+// - flags are not supported
+var globToRegExp = function (globExp) {
+    if (typeof globExp !== 'string') {
+        throw new TypeError('Glob Expression must be a string!');
     }
-}
 
+    var regExp = "";
 
+    for (let i = 0, len = globExp.length; i < len; i++) {
+        let c = globExp[i];
 
-$$.remote.cryptoProvider = new CryptoProvider();
+        switch (c) {
+            case "/":
+            case "$":
+            case "^":
+            case "+":
+            case ".":
+            case "(":
+            case ")":
+            case "=":
+            case "!":
+            case "|":
+                regExp += "\\" + c;
+                break;
 
-$$.remote.base64Encode = function base64Encode(stringToEncode){
-    return window.btoa(stringToEncode);
+            case "*":
+                // treat any number of "*" as one
+                while(globExp[i + 1] === "*") {
+                    i++;
+                }
+                regExp += ".*";
+                break;
+
+            default:
+                regExp += c;
+        }
+    }
+
+    // set the regular expression with ^ & $
+    regExp = "^" + regExp + "$";
+
+    return new RegExp(regExp);
 };
 
-$$.remote.base64Decode = function base64Decode(encodedString){
-    return window.atob(encodedString);
-};
-
-}).call(this,require("buffer").Buffer)
-
-},{"buffer":false}],"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-node-client.js":[function(require,module,exports){
-(function (Buffer){
-require("./psk-abstract-client");
-
-const http = require("http");
-const https = require("https");
-const URL = require("url");
-const userAgent = 'PSK NodeAgent/0.0.1';
-const signatureHeaderName = process.env.vmq_signature_header_name || "x-signature";
-
-
-console.log("PSK node client loading");
-
-function getNetworkForOptions(options) {
-	if(options.protocol === 'http:') {
-		return http;
-	} else if(options.protocol === 'https:') {
-		return https;
-	} else {
-		throw new Error(`Can't handle protocol ${options.protocol}`);
-	}
-
-}
-
-function generateMethodForRequestWithData(httpMethod) {
-	return function (url, data, callback) {
-		const innerUrl = URL.parse(url);
-
-		const options = {
-			hostname: innerUrl.hostname,
-			path: innerUrl.pathname,
-			port: parseInt(innerUrl.port),
-			headers: {
-				'User-Agent': userAgent,
-				[signatureHeaderName]: 'replaceThisPlaceholderSignature'
-			},
-			method: httpMethod
-		};
-
-		const network = getNetworkForOptions(innerUrl);
-
-		if (ArrayBuffer.isView(data) || Buffer.isBuffer(data) || data instanceof ArrayBuffer) {
-			if (!Buffer.isBuffer(data)) {
-				data = Buffer.from(data);
-			}
-
-			options.headers['Content-Type'] = 'application/octet-stream';
-			options.headers['Content-Length'] = data.length;
-		}
-
-		const req = network.request(options, (res) => {
-			const {statusCode} = res;
-
-			let error;
-			if (statusCode >= 400) {
-				error = new Error('Request Failed.\n' +
-					`Status Code: ${statusCode}\n` +
-					`URL: ${options.hostname}:${options.port}${options.path}`);
-			}
-
-			if (error) {
-				callback({error: error, statusCode: statusCode});
-				// free up memory
-				res.resume();
-				return;
-			}
-
-			let rawData = '';
-			res.on('data', (chunk) => {
-				rawData += chunk;
-			});
-			res.on('end', () => {
-				try {
-					return callback(null, rawData, res.headers);
-				} catch (err) {
-					return callback(err);
-				}
-			});
-		}).on("error", (error) => {
-			console.log("POST Error", error);
-			callback(error);
-		});
-
-		if (data && data.pipe && typeof data.pipe === "function") {
-			data.pipe(req);
-			return;
-		}
-
-		if (typeof data !== 'string' && !Buffer.isBuffer(data) && !ArrayBuffer.isView(data)) {
-			data = JSON.stringify(data);
-		}
-
-		req.write(data);
-		req.end();
-	};
-}
-
-$$.remote.doHttpPost = generateMethodForRequestWithData('POST');
-
-$$.remote.doHttpPut = generateMethodForRequestWithData('PUT');
-
-$$.remote.doHttpGet = function doHttpGet(url, callback){
-    const innerUrl = URL.parse(url);
-
-	const options = {
-		hostname: innerUrl.hostname,
-		path: innerUrl.pathname + (innerUrl.search || ''),
-		port: parseInt(innerUrl.port),
-		headers: {
-			'User-Agent': userAgent,
-            [signatureHeaderName]: 'someSignature'
-		},
-		method: 'GET'
-	};
-
-	const network = getNetworkForOptions(innerUrl);
-
-	const req = network.request(options, (res) => {
-		const { statusCode } = res;
-
-		let error;
-		if (statusCode !== 200) {
-			error = new Error('Request Failed.\n' +
-				`Status Code: ${statusCode}`);
-			error.code = statusCode;
-		}
-
-		if (error) {
-			callback({error:error, statusCode:statusCode});
-			// free up memory
-			res.resume();
-			return
-		}
-
-		let rawData;
-		const contentType = res.headers['content-type'];
-
-		if(contentType === "application/octet-stream"){
-			rawData = [];
-		}else{
-			rawData = '';
-		}
-
-		res.on('data', (chunk) => {
-			if(Array.isArray(rawData)){
-				rawData.push(...chunk);
-			}else{
-				rawData += chunk;
-			}
-		});
-		res.on('end', () => {
-			try {
-				if(Array.isArray(rawData)){
-					rawData = Buffer.from(rawData);
-				}
-				return callback(null, rawData, res.headers);
-			} catch (err) {
-				console.log("Client error:", err);
-			}
-		});
-	});
-
-	req.on("error", (error) => {
-		if(error && error.code !== 'ECONNRESET'){
-        	console.log("GET Error", error);
-		}
-
-		callback(error);
-	});
-
-	req.end();
-};
-
-$$.remote.base64Encode = function base64Encode(stringToEncode){
-    return Buffer.from(stringToEncode).toString('base64');
-};
-
-$$.remote.base64Decode = function base64Decode(encodedString){
-    return Buffer.from(encodedString, 'base64').toString('ascii');
-};
-
-}).call(this,require("buffer").Buffer)
-
-},{"./psk-abstract-client":"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-abstract-client.js","buffer":false,"http":false,"https":false,"url":false}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/AsyncDispatcher.js":[function(require,module,exports){
+module.exports = globToRegExp;
+},{}],"/opt/new_swarm_engine_release/privatesky/modules/double-check/utils/AsyncDispatcher.js":[function(require,module,exports){
 
 function AsyncDispatcher(finalCallback) {
 	let results = [];
@@ -2060,625 +1609,30 @@ function AsyncDispatcher(finalCallback) {
 }
 
 module.exports = AsyncDispatcher;
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/Combos.js":[function(require,module,exports){
-function product(args) {
-    if(!args.length){
-        return [ [] ];
-    }
-    var prod = product(args.slice(1)), r = [];
-    args[0].forEach(function(x) {
-        prod.forEach(function(p) {
-            r.push([ x ].concat(p));
-        });
-    });
-    return r;
-}
-
-function objectProduct(obj) {
-    var keys = Object.keys(obj),
-        values = keys.map(function(x) { return obj[x]; });
-
-    return product(values).map(function(p) {
-        var e = {};
-        keys.forEach(function(k, n) { e[k] = p[n]; });
-        return e;
-    });
-}
-
-module.exports = objectProduct;
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/OwM.js":[function(require,module,exports){
-var meta = "meta";
-
-function OwM(serialized){
-
-    if(serialized){
-        return OwM.prototype.convert(serialized);
-    }
-
-    Object.defineProperty(this, meta, {
-        writable: false,
-        enumerable: true,
-        value: {}
-    });
-
-    Object.defineProperty(this, "setMeta", {
-        writable: false,
-        enumerable: false,
-        configurable:false,
-        value: function(prop, value){
-            if(typeof prop == "object" && typeof value == "undefined"){
-                for(var p in prop){
-                    this[meta][p] = prop[p];
-                }
-                return prop;
-            }
-            this[meta][prop] = value;
-            return value;
-        }
-    });
-
-    Object.defineProperty(this, "getMeta", {
-        writable: false,
-        value: function(prop){
-            return this[meta][prop];
-        }
-    });
-}
-
-function testOwMSerialization(obj){
-    let res = false;
-
-    if(obj){
-        res = typeof obj[meta] != "undefined" && !(obj instanceof OwM);
-    }
-
-    return res;
-}
-
-OwM.prototype.convert = function(serialized){
-    const owm = new OwM();
-
-    for(var metaProp in serialized.meta){
-        if(!testOwMSerialization(serialized[metaProp])) {
-            owm.setMeta(metaProp, serialized.meta[metaProp]);
-        }else{
-            owm.setMeta(metaProp, OwM.prototype.convert(serialized.meta[metaProp]));
-        }
-    }
-
-    for(var simpleProp in serialized){
-        if(simpleProp === meta) {
-            continue;
-        }
-
-        if(!testOwMSerialization(serialized[simpleProp])){
-            owm[simpleProp] = serialized[simpleProp];
-        }else{
-            owm[simpleProp] = OwM.prototype.convert(serialized[simpleProp]);
-        }
-    }
-
-    return owm;
-};
-
-OwM.prototype.getMetaFrom = function(obj, name){
-    var res;
-    if(!name){
-        res = obj[meta];
-    }else{
-        res = obj[meta][name];
-    }
-    return res;
-};
-
-OwM.prototype.setMetaFor = function(obj, name, value){
-    obj[meta][name] = value;
-    return obj[meta][name];
-};
-
-module.exports = OwM;
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/Queue.js":[function(require,module,exports){
-function QueueElement(content) {
-	this.content = content;
-	this.next = null;
-}
-
-function Queue() {
-	this.head = null;
-	this.tail = null;
-	this.length = 0;
-	this.push = function (value) {
-		const newElement = new QueueElement(value);
-		if (!this.head) {
-			this.head = newElement;
-			this.tail = newElement;
-		} else {
-			this.tail.next = newElement;
-			this.tail = newElement;
-		}
-		this.length++;
-	};
-
-	this.pop = function () {
-		if (!this.head) {
-			return null;
-		}
-		const headCopy = this.head;
-		this.head = this.head.next;
-		this.length--;
-
-		//fix???????
-		if(this.length === 0){
-            this.tail = null;
-		}
-
-		return headCopy.content;
-	};
-
-	this.front = function () {
-		return this.head ? this.head.content : undefined;
-	};
-
-	this.isEmpty = function () {
-		return this.head === null;
-	};
-
-	this[Symbol.iterator] = function* () {
-		let head = this.head;
-		while(head !== null) {
-			yield head.content;
-			head = head.next;
-		}
-	}.bind(this);
-}
-
-Queue.prototype.toString = function () {
-	let stringifiedQueue = '';
-	let iterator = this.head;
-	while (iterator) {
-		stringifiedQueue += `${JSON.stringify(iterator.content)} `;
-		iterator = iterator.next;
-	}
-	return stringifiedQueue;
-};
-
-Queue.prototype.inspect = Queue.prototype.toString;
-
-module.exports = Queue;
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/SwarmPacker.js":[function(require,module,exports){
-const HEADER_SIZE_RESEARVED = 4;
-
-const msgpack = require('@msgpack/msgpack');
-
-function SwarmPacker(){
-}
-
-function copyStringtoArrayBuffer(str, buffer){
-    if(typeof str !== "string"){
-        throw new Error("Wrong param type received");
-    }
-    for(var i = 0; i < str.length; i++) {
-        buffer[i] = str.charCodeAt(i);
-    }
-    return buffer;
-}
-
-function copyFromBuffer(target, source){
-    for(let i=0; i<source.length; i++){
-        target[i] = source[i];
-    }
-    return target;
-}
-
-let serializers = {};
-
-SwarmPacker.registerSerializer = function(name, implementation){
-    if(serializers[name]){
-        throw new Error("Serializer name already exists");
-    }
-    serializers[name] = implementation;
-};
-
-function getSerializer(name){
-    return serializers[name];
-}
-
-SwarmPacker.getSerializer = getSerializer;
-
-SwarmPacker.registerSerializer("json", {
-    serialize: JSON.stringify,
-    deserialize: (serialization)=>{
-        if(typeof serialization !== "string"){
-            let textDecoder = new TextDecoder();
-            serialization = textDecoder.decode(serialization);
-        }
-        return JSON.parse(serialization);
-    },
-    getType: ()=>{
-        return "json";
-    }
-});
-
-SwarmPacker.registerSerializer("msgpack", {
-    serialize: msgpack.encode,
-    deserialize: msgpack.decode,
-    getType: ()=>{
-        return "msgpack";
-    }
-});
-
-SwarmPacker.pack = function(swarm, serializer){
-
-    let jsonSerializer = getSerializer("json");
-    if(typeof serializer === "undefined"){
-        serializer = jsonSerializer;
-    }
-
-    let swarmSerialization = serializer.serialize(swarm);
-
-    let header = {
-        command: swarm.getMeta("command"),
-        swarmId : swarm.getMeta("swarmId"),
-        swarmTypeName: swarm.getMeta("swarmTypeName"),
-        swarmTarget: swarm.getMeta("target"),
-        serializationType: serializer.getType()
-    };
-
-    header = serializer.serialize(header);
-
-    if(header.length >= Math.pow(2, 32)){
-        throw new Error("Swarm serialization too big.");
-    }
-
-    //arraybuffer construction
-    let size = HEADER_SIZE_RESEARVED + header.length + swarmSerialization.length;
-    let pack = new ArrayBuffer(size);
-
-    let sizeHeaderView = new DataView(pack, 0);
-    sizeHeaderView.setUint32(0, header.length);
-
-    let headerView = new Uint8Array(pack, HEADER_SIZE_RESEARVED);
-    copyStringtoArrayBuffer(header, headerView);
-
-    let serializationView = new Uint8Array(pack, HEADER_SIZE_RESEARVED+header.length);
-    if(typeof swarmSerialization === "string"){
-        copyStringtoArrayBuffer(swarmSerialization, serializationView);
-    }else{
-        copyFromBuffer(serializationView, swarmSerialization);
-    }
-
-    return pack;
-};
-
-SwarmPacker.unpack = function(pack){
-    let jsonSerialiser = SwarmPacker.getSerializer("json");
-    let headerSerialization = getHeaderSerializationFromPack(pack);
-    let header = jsonSerialiser.deserialize(headerSerialization);
-
-    let serializer = SwarmPacker.getSerializer(header.serializationType);
-    let messageView = new Uint8Array(pack, HEADER_SIZE_RESEARVED+headerSerialization.length);
-
-    let swarm = serializer.deserialize(messageView);
-    return swarm;
-};
-
-function getHeaderSerializationFromPack(pack){
-    let headerSize = new DataView(pack).getUint32(0);
-
-    let headerView = new Uint8Array(pack, HEADER_SIZE_RESEARVED, headerSize);
-    return headerView;
-}
-
-SwarmPacker.getHeader = function(pack){
-    let jsonSerialiser = SwarmPacker.getSerializer("json");
-    let header = jsonSerialiser.deserialize(getHeaderSerializationFromPack(pack));
-
-    return header;
-};
-module.exports = SwarmPacker;
-},{"@msgpack/msgpack":false}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/beesHealer.js":[function(require,module,exports){
-const OwM = require("./OwM");
-
-/*
-    Prepare the state of a swarm to be serialised
-*/
-
-exports.asJSON = function(valueObj, phaseName, args, callback){
-
-        let valueObject = valueObj.valueOf();
-        let res = new OwM();
-        res.publicVars          = valueObject.publicVars;
-        res.privateVars         = valueObject.privateVars;
-
-        res.setMeta("COMMAND_ARGS",        OwM.prototype.getMetaFrom(valueObject, "COMMAND_ARGS"));
-        res.setMeta("SecurityParadigm",        OwM.prototype.getMetaFrom(valueObject, "SecurityParadigm"));
-        res.setMeta("swarmTypeName", OwM.prototype.getMetaFrom(valueObject, "swarmTypeName"));
-        res.setMeta("swarmId",       OwM.prototype.getMetaFrom(valueObject, "swarmId"));
-        res.setMeta("target",        OwM.prototype.getMetaFrom(valueObject, "target"));
-        res.setMeta("homeSecurityContext",        OwM.prototype.getMetaFrom(valueObject, "homeSecurityContext"));
-        res.setMeta("requestId",        OwM.prototype.getMetaFrom(valueObject, "requestId"));
-
-
-        if(!phaseName){
-            res.setMeta("command", "stored");
-        } else {
-            res.setMeta("phaseName", phaseName);
-            res.setMeta("phaseId", $$.uidGenerator.safe_uuid());
-            res.setMeta("args", args);
-            res.setMeta("command", OwM.prototype.getMetaFrom(valueObject, "command") || "executeSwarmPhase");
-        }
-
-        res.setMeta("waitStack", valueObject.meta.waitStack); //TODO: think if is not better to be deep cloned and not referenced!!!
-
-        if(callback){
-            return callback(null, res);
-        }
-        //console.log("asJSON:", res, valueObject);
-        return res;
-};
-
-exports.jsonToNative = function(serialisedValues, result){
-
-    for(let v in serialisedValues.publicVars){
-        result.publicVars[v] = serialisedValues.publicVars[v];
-
-    };
-    for(let l in serialisedValues.privateVars){
-        result.privateVars[l] = serialisedValues.privateVars[l];
-    };
-
-    for(let i in OwM.prototype.getMetaFrom(serialisedValues)){
-        OwM.prototype.setMetaFor(result, i, OwM.prototype.getMetaFrom(serialisedValues, i));
-    };
-
-};
-},{"./OwM":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/OwM.js"}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/pskconsole.js":[function(require,module,exports){
-var commands = {};
-var commands_help = {};
-
-//global function addCommand
-addCommand = function addCommand(verb, adverbe, funct, helpLine){
-    var cmdId;
-    if(!helpLine){
-        helpLine = " ";
-    } else {
-        helpLine = " " + helpLine;
-    }
-    if(adverbe){
-        cmdId = verb + " " +  adverbe;
-        helpLine = verb + " " +  adverbe + helpLine;
-    } else {
-        cmdId = verb;
-        helpLine = verb + helpLine;
-    }
-    commands[cmdId] = funct;
-        commands_help[cmdId] = helpLine;
-};
-
-function doHelp(){
-    console.log("List of commands:");
-    for(var l in commands_help){
-        console.log("\t", commands_help[l]);
-    }
-}
-
-addCommand("-h", null, doHelp, "\t\t\t\t\t\t |just print the help");
-addCommand("/?", null, doHelp, "\t\t\t\t\t\t |just print the help");
-addCommand("help", null, doHelp, "\t\t\t\t\t\t |just print the help");
-
-
-function runCommand(){
-  var argv = Object.assign([], process.argv);
-  var cmdId = null;
-  var cmd = null;
-  argv.shift();
-  argv.shift();
-
-  if(argv.length >=1){
-      cmdId = argv[0];
-      cmd = commands[cmdId];
-      argv.shift();
-  }
-
-
-  if(!cmd && argv.length >=1){
-      cmdId = cmdId + " " + argv[0];
-      cmd = commands[cmdId];
-      argv.shift();
-  }
-
-  if(!cmd){
-    if(cmdId){
-        console.log("Unknown command: ", cmdId);
-    }
-    cmd = doHelp;
-  }
-
-  cmd.apply(null,argv);
-
-}
-
-module.exports = {
-    runCommand
-};
-
-
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/safe-uuid.js":[function(require,module,exports){
-
-function encode(buffer) {
-    return buffer.toString('base64')
-        .replace(/\+/g, '')
-        .replace(/\//g, '')
-        .replace(/=+$/, '');
-};
-
-function stampWithTime(buf, salt, msalt){
-    if(!salt){
-        salt = 1;
-    }
-    if(!msalt){
-        msalt = 1;
-    }
-    var date = new Date;
-    var ct = Math.floor(date.getTime() / salt);
-    var counter = 0;
-    while(ct > 0 ){
-        //console.log("Counter", counter, ct);
-        buf[counter*msalt] = Math.floor(ct % 256);
-        ct = Math.floor(ct / 256);
-        counter++;
-    }
-}
-
-/*
-    The uid contains around 256 bits of randomness and are unique at the level of seconds. This UUID should by cryptographically safe (can not be guessed)
-
-    We generate a safe UID that is guaranteed unique (by usage of a PRNG to geneate 256 bits) and time stamping with the number of seconds at the moment when is generated
-    This method should be safe to use at the level of very large distributed systems.
-    The UUID is stamped with time (seconds): does it open a way to guess the UUID? It depends how safe is "crypto" PRNG, but it should be no problem...
-
+},{}],"/opt/new_swarm_engine_release/privatesky/node_modules/is-buffer/index.js":[function(require,module,exports){
+/*!
+ * Determine if an object is a Buffer
+ *
+ * @author   Feross Aboukhadijeh <https://feross.org>
+ * @license  MIT
  */
 
-var generateUid = null;
-
-
-exports.init = function(externalGenerator){
-    generateUid = externalGenerator.generateUid;
-    return module.exports;
-};
-
-exports.safe_uuid = function() {
-    var buf = generateUid(32);
-    stampWithTime(buf, 1000, 3);
-    return encode(buf);
-};
-
-
-
-/*
-    Try to generate a small UID that is unique against chance in the same millisecond second and in a specific context (eg in the same choreography execution)
-    The id contains around 6*8 = 48  bits of randomness and are unique at the level of milliseconds
-    This method is safe on a single computer but should be used with care otherwise
-    This UUID is not cryptographically safe (can be guessed)
- */
-exports.short_uuid = function(callback) {
-    require('crypto').randomBytes(12, function (err, buf) {
-        if (err) {
-            callback(err);
-            return;
-        }
-        stampWithTime(buf,1,2);
-        callback(null, encode(buf));
-    });
-};
-},{"crypto":false}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/uidGenerator.js":[function(require,module,exports){
-(function (Buffer){
-const crypto = require('crypto');
-const Queue = require("./Queue");
-var PSKBuffer = typeof $$ !== "undefined" && $$.PSKBuffer ? $$.PSKBuffer : Buffer;
-
-function UidGenerator(minBuffers, buffersSize) {
-	var buffers = new Queue();
-	var lowLimit = .2;
-
-	function fillBuffers(size){
-		//notifyObserver();
-		const sz = size || minBuffers;
-		if(buffers.length < Math.floor(minBuffers*lowLimit)){
-			for(var i=0+buffers.length; i < sz; i++){
-				generateOneBuffer(null);
-			}
-		}
-	}
-
-	fillBuffers();
-
-	function generateOneBuffer(b){
-		if(!b){
-			b = PSKBuffer.alloc(0);
-		}
-		const sz = buffersSize - b.length;
-		/*crypto.randomBytes(sz, function (err, res) {
-			buffers.push(Buffer.concat([res, b]));
-			notifyObserver();
-		});*/
-		buffers.push(PSKBuffer.concat([ crypto.randomBytes(sz), b ]));
-		notifyObserver();
-	}
-
-	function extractN(n){
-		var sz = Math.floor(n / buffersSize);
-		var ret = [];
-
-		for(var i=0; i<sz; i++){
-			ret.push(buffers.pop());
-			setTimeout(generateOneBuffer, 1);
-		}
-
-
-
-		var remainder = n % buffersSize;
-		if(remainder > 0){
-			var front = buffers.pop();
-			ret.push(front.slice(0,remainder));
-			//generateOneBuffer(front.slice(remainder));
-			setTimeout(function(){
-				generateOneBuffer(front.slice(remainder));
-			},1);
-		}
-
-		//setTimeout(fillBuffers, 1);
-
-		return Buffer.concat(ret);
-	}
-
-	var fillInProgress = false;
-
-	this.generateUid = function(n){
-		var totalSize = buffers.length * buffersSize;
-		if(n <= totalSize){
-			return extractN(n);
-		} else {
-			if(!fillInProgress){
-				fillInProgress = true;
-				setTimeout(function(){
-					fillBuffers(Math.floor(minBuffers*2.5));
-					fillInProgress = false;
-				}, 1);
-			}
-			return crypto.randomBytes(n);
-		}
-	};
-
-	var observer;
-	this.registerObserver = function(obs){
-		if(observer){
-			console.error(new Error("One observer allowed!"));
-		}else{
-			if(typeof obs == "function"){
-				observer = obs;
-				//notifyObserver();
-			}
-		}
-	};
-
-	function notifyObserver(){
-		if(observer){
-			var valueToReport = buffers.length*buffersSize;
-			setTimeout(function(){
-				observer(null, {"size": valueToReport});
-			}, 10);
-		}
-	}
+// The _isBuffer check is for Safari 5-7 support, because it's missing
+// Object.prototype.constructor. Remove this eventually
+module.exports = function (obj) {
+  return obj != null && (isBuffer(obj) || isSlowBuffer(obj) || !!obj._isBuffer)
 }
 
-module.exports.createUidGenerator = function (minBuffers, bufferSize) {
-	return new UidGenerator(minBuffers, bufferSize);
-};
+function isBuffer (obj) {
+  return !!obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
+}
 
-}).call(this,require("buffer").Buffer)
+// For Node v0.10 support. Remove this eventually.
+function isSlowBuffer (obj) {
+  return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
+}
 
-},{"./Queue":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/Queue.js","buffer":false,"crypto":false}],"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/array-set.js":[function(require,module,exports){
+},{}],"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/array-set.js":[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -5732,58 +4686,326 @@ module.exports = bufferFrom
 
 }).call(this,require("buffer").Buffer)
 
-},{"buffer":false}],"foldermq":[function(require,module,exports){
-module.exports = {
-					createQue: require("./lib/folderMQ").getFolderQueue
-					//folderMQ: require("./lib/folderMQ")
-};
-},{"./lib/folderMQ":"/opt/new_swarm_engine_release/privatesky/modules/foldermq/lib/folderMQ.js"}],"interact":[function(require,module,exports){
-/*
-Module that offers APIs to interact with PrivateSky web sandboxes
+},{"buffer":false}],"double-check":[function(require,module,exports){
+/**
+ * Generic function used to registers methods such as asserts, logging, etc. on the current context.
+ * @param name {String)} - name of the method (use case) to be registered.
+ * @param func {Function} - handler to be invoked.
+ * @param paramsDescription {Object} - parameters descriptions
+ * @param after {Function} - callback function to be called after the function has been executed.
  */
-
-
-const exportBrowserInteract = {
-    enableIframeInteractions: function () {
-        module.exports.createWindowMQ = require("./lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ").createMQ;
-        module.exports.createWindowInteractionSpace = require("./lib/interactionSpaceImpl/WindowMQInteractionSpace").createInteractionSpace;
-    },
-    enableReactInteractions: function () {
-        module.exports.createWindowMQ = require("./lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ").createMQ;
-        module.exports.createWindowInteractionSpace = require("./lib/interactionSpaceImpl/WindowMQInteractionSpace").createInteractionSpace;
-    },
-    enableWebViewInteractions:function(){
-        module.exports.createWindowInteractionSpace = require("./lib/interactionSpaceImpl/WebViewMQInteractionSpace").createInteractionSpace;
-        module.exports.createWindowMQ = require("./lib/interactionSpaceImpl/specificMQImpl/ChildWebViewMQ").createMQ;
-    },
-    enableLocalInteractions: function () {
-        module.exports.createInteractionSpace = require("./lib/interactionSpaceImpl/SoundPubSubMQBasedInteractionSpace").createInteractionSpace;
-    },
-    enableRemoteInteractions: function () {
-        module.exports.createRemoteInteractionSpace = require('./lib/interactionSpaceImpl/httpInteractionSpace').createInteractionSpace;
+function addUseCase(name, func, paramsDescription, after) {
+    var newFunc = func;
+    if (typeof after === "function") {
+        newFunc = function () {
+            const args = Array.from(arguments);
+            func.apply(this, args);
+            after();
+        };
     }
-};
+
+    // some properties should not be overridden
+    const protectedProperties = ['addCheck', 'addCase', 'register'];
+    if (protectedProperties.indexOf(name) === -1) {
+        this[name] = newFunc;
+    } else {
+        throw new Error('Cant overwrite ' + name);
+    }
+
+    if (paramsDescription) {
+        this.params[name] = paramsDescription;
+    }
+}
+
+/**
+ * Creates an alias to an existing function.
+ * @param name1 {String} - New function name.
+ * @param name2 {String} - Existing function name.
+ */
+function alias(name1, name2) {
+    this[name1] = this[name2];
+}
+
+/**
+ * Singleton for adding various functions for use cases regarding logging.
+ * @constructor
+ */
+function LogsCore() {
+    this.params = {};
+}
+
+/**
+ * Singleton for adding your various functions for asserts.
+ * @constructor
+ */
+function AssertCore() {
+    this.params = {};
+}
+
+/**
+ * Singleton for adding your various functions for checks.
+ * @constructor
+ */
+function CheckCore() {
+    this.params = {};
+}
+
+/**
+ * Singleton for adding your various functions for generating exceptions.
+ * @constructor
+ */
+function ExceptionsCore() {
+    this.params = {};
+}
+
+/**
+ * Singleton for adding your various functions for running tests.
+ * @constructor
+ */
+function TestRunnerCore() {
+}
+
+LogsCore.prototype.addCase = addUseCase;
+AssertCore.prototype.addCheck = addUseCase;
+CheckCore.prototype.addCheck = addUseCase;
+ExceptionsCore.prototype.register = addUseCase;
+
+LogsCore.prototype.alias = alias;
+AssertCore.prototype.alias = alias;
+CheckCore.prototype.alias = alias;
+ExceptionsCore.prototype.alias = alias;
+
+// Create modules
+var assertObj = new AssertCore();
+var checkObj = new CheckCore();
+var exceptionsObj = new ExceptionsCore();
+var loggerObj = new LogsCore();
+var testRunnerObj = new TestRunnerCore();
+
+// Export modules
+exports.assert = assertObj;
+exports.check = checkObj;
+exports.exceptions = exceptionsObj;
+exports.logger = loggerObj;
+exports.testRunner = testRunnerObj;
+
+// Initialise modules
+require("./standardAsserts.js").init(exports, loggerObj);
+require("./standardLogs.js").init(exports);
+require("./standardExceptions.js").init(exports);
+require("./standardChecks.js").init(exports);
+require("./runner.js").init(exports);
+
+// Global Uncaught Exception handler.
+if (process.on) {
+    process.on('uncaughtException', function (err) {
+        if (typeof err.isFailedAssert == "undefined") {
+            exports.logger.record({
+                level: 0,
+                message: "double-check has intercepted an uncaught exception",
+                stack: err.stack
+            });
+            exports.assert.forceFailedTest("Uncaught Exception!", err);
+        }
+    });
+}
 
 
-if (typeof navigator !== "undefined") {
-    module.exports = exportBrowserInteract;
+const fs = require('fs');
+const crypto = require('crypto');
+const AsyncDispatcher = require('../utils/AsyncDispatcher');
+const path = require('path');
+
+function ensureFolderHierarchy(folders, callback) {
+    const asyncDispatcher = new AsyncDispatcher(() => {
+        callback();
+    });
+
+    if (folders.length === 0) {
+        return callback();
+    }
+
+    asyncDispatcher.dispatchEmpty(folders.length);
+    folders.forEach(folder => {
+        fs.access(folder, (err) => {
+            if (err) {
+                fs.mkdir(folder, {recursive: true}, (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    asyncDispatcher.markOneAsFinished();
+                });
+            } else {
+                asyncDispatcher.markOneAsFinished();
+            }
+        });
+    });
+
 }
-else {
-    module.exports = {
-        createNodeInteractionSpace: require("./lib/interactionSpaceImpl/folderMQBasedInteractionSpace").createInteractionSpace,
-        createInteractionSpace: require("./lib/interactionSpaceImpl/SoundPubSubMQBasedInteractionSpace").createInteractionSpace,
-        createRemoteInteractionSpace: require('./lib/interactionSpaceImpl/httpInteractionSpace').createInteractionSpace
-    };
+
+function ensureFilesExist(folders, files, text, callback) {
+    if (!Array.isArray(folders)) {
+        folders = [folders];
+    }
+
+    if (!Array.isArray(files)) {
+        files = [files];
+    }
+
+    ensureFolderHierarchy(folders, (err) => {
+        if (err) {
+            return callback(err);
+        }
+
+        if (files.length === 0) {
+            return callback();
+        }
+
+        files.forEach((file, i) => {
+            const stream = fs.createWriteStream(file);
+            stream.write(text[i]);
+            if (i === files.length - 1) {
+                return callback();
+            }
+        });
+    });
 }
-},{"./lib/interactionSpaceImpl/SoundPubSubMQBasedInteractionSpace":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/SoundPubSubMQBasedInteractionSpace.js","./lib/interactionSpaceImpl/WebViewMQInteractionSpace":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/WebViewMQInteractionSpace.js","./lib/interactionSpaceImpl/WindowMQInteractionSpace":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/WindowMQInteractionSpace.js","./lib/interactionSpaceImpl/folderMQBasedInteractionSpace":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/folderMQBasedInteractionSpace.js","./lib/interactionSpaceImpl/httpInteractionSpace":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/httpInteractionSpace.js","./lib/interactionSpaceImpl/specificMQImpl/ChildWebViewMQ":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWebViewMQ.js","./lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ.js"}],"psk-http-client":[function(require,module,exports){
-//to look nice the requireModule on Node
-require("./lib/psk-abstract-client");
-if(!$$.browserRuntime){
-	require("./lib/psk-node-client");
-}else{
-	require("./lib/psk-browser-client");
+
+
+function computeFileHash(filePath, callback) {
+    const readStream = fs.createReadStream(filePath);
+    const hash = crypto.createHash("sha256");
+    readStream.on("data", (data) => {
+        hash.update(data);
+    });
+
+    readStream.on("close", () => {
+        callback(undefined, hash.digest("hex"));
+    });
 }
-},{"./lib/psk-abstract-client":"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-abstract-client.js","./lib/psk-browser-client":"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-browser-client.js","./lib/psk-node-client":"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-node-client.js"}],"source-map-support":[function(require,module,exports){
+
+function computeFoldersHashes(folders, callback) {
+    if (!Array.isArray(folders)) {
+        folders = [folders];
+    }
+
+    if (folders.length === 0) {
+        return callback();
+    }
+
+    let hashes = [];
+    const asyncDispatcher = new AsyncDispatcher(() => {
+        callback(undefined, hashes);
+    });
+
+    asyncDispatcher.dispatchEmpty(folders.length);
+    folders.forEach(folder => {
+        __computeHashRecursively(folder, hashes, (err, hashList) => {
+            if (err) {
+                return callback(err);
+            }
+
+            hashes = hashes.concat(hashList);
+            asyncDispatcher.markOneAsFinished();
+        });
+    });
+}
+
+function __computeHashRecursively(folderPath, hashes = [], callback) {
+    fs.readdir(folderPath, (err, files) => {
+        if (err) {
+            return callback(err);
+        }
+
+        if (files.length === 0) {
+            return callback(undefined, hashes);
+        }
+
+        const asyncDispatcher = new AsyncDispatcher(() => {
+            callback(undefined, hashes);
+        });
+
+        asyncDispatcher.dispatchEmpty(files.length);
+        files.forEach(file => {
+            const tempPath = path.join(folderPath, file);
+            fs.stat(tempPath, (err, stats) => {
+                if (err) {
+                    return callback(err);
+                }
+
+                if (stats.isFile()) {
+                    computeFileHash(tempPath, (err, fileHash) => {
+                        if (err) {
+                            return callback(err);
+                        }
+
+                        hashes.push(fileHash);
+                        asyncDispatcher.markOneAsFinished();
+                    });
+                } else {
+                    __computeHashRecursively(tempPath, hashes, (err) => {
+                        if (err) {
+                            return callback(err);
+                        }
+                        asyncDispatcher.markOneAsFinished();
+                    });
+                }
+            });
+        });
+    });
+}
+
+function deleteFolderRecursive(folderPath) {
+    if (fs.existsSync(folderPath)) {
+        fs.readdirSync(folderPath).forEach((file) => {
+            let currentPath = path.join(folderPath, file);
+            if (fs.lstatSync(currentPath).isDirectory()) { // recurse
+                deleteFolderRecursive(currentPath);
+            } else { // delete file
+                fs.unlinkSync(currentPath);
+            }
+        });
+        fs.rmdirSync(folderPath);
+    }
+}
+
+
+
+function deleteFoldersSync(folders) {
+    if (!Array.isArray(folders)) {
+        folders = [folders];
+    }
+
+    if (folders.length === 0) {
+        return;
+    }
+
+    folders.forEach(folder => {
+        deleteFolderRecursive(folder);
+    });
+}
+
+function createTestFolder(prefix, cllback) {
+    fs.mkdtemp(prefix, function (err, res) {
+        const cleanFolder = function () {
+            deleteFolderRecursive(res);
+        };
+        exports.assert.addCleaningFunction(cleanFolder);
+        cllback(err, res);
+    });
+}
+
+Object.assign(module.exports, {
+    deleteFolderRecursive,
+    createTestFolder,
+    computeFoldersHashes,
+    computeFileHash,
+    ensureFilesExist,
+    deleteFoldersSync
+});
+
+},{"../utils/AsyncDispatcher":"/opt/new_swarm_engine_release/privatesky/modules/double-check/utils/AsyncDispatcher.js","./runner.js":"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/runner.js","./standardAsserts.js":"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/standardAsserts.js","./standardChecks.js":"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/standardChecks.js","./standardExceptions.js":"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/standardExceptions.js","./standardLogs.js":"/opt/new_swarm_engine_release/privatesky/modules/double-check/lib/standardLogs.js","crypto":false,"fs":false,"path":false}],"source-map-support":[function(require,module,exports){
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var path = require('path');
 
@@ -6362,37 +5584,5 @@ exports.SourceMapGenerator = require('./lib/source-map-generator').SourceMapGene
 exports.SourceMapConsumer = require('./lib/source-map-consumer').SourceMapConsumer;
 exports.SourceNode = require('./lib/source-node').SourceNode;
 
-},{"./lib/source-map-consumer":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-map-consumer.js","./lib/source-map-generator":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-map-generator.js","./lib/source-node":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-node.js"}],"swarmutils":[function(require,module,exports){
-(function (global){
-module.exports.OwM = require("./lib/OwM");
-module.exports.beesHealer = require("./lib/beesHealer");
-
-const uidGenerator = require("./lib/uidGenerator").createUidGenerator(200, 32);
-
-module.exports.safe_uuid = require("./lib/safe-uuid").init(uidGenerator);
-
-module.exports.Queue = require("./lib/Queue");
-module.exports.combos = require("./lib/Combos");
-
-module.exports.uidGenerator = uidGenerator;
-module.exports.generateUid = uidGenerator.generateUid;
-module.exports.AsyncDispatcher = require("./lib/AsyncDispatcher");
-module.exports.SwarmPacker = require("./lib/SwarmPacker");
-
-module.exports.createPskConsole = function () {
-  return require('./lib/pskconsole');
-};
-
-
-if(typeof global.$$ == "undefined"){
-  global.$$ = {};
-}
-
-if(typeof global.$$.uidGenerator == "undefined"){
-    $$.uidGenerator = module.exports.safe_uuid;
-}
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"./lib/AsyncDispatcher":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/AsyncDispatcher.js","./lib/Combos":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/Combos.js","./lib/OwM":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/OwM.js","./lib/Queue":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/Queue.js","./lib/SwarmPacker":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/SwarmPacker.js","./lib/beesHealer":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/beesHealer.js","./lib/pskconsole":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/pskconsole.js","./lib/safe-uuid":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/safe-uuid.js","./lib/uidGenerator":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/uidGenerator.js"}]},{},["/opt/new_swarm_engine_release/privatesky/builds/tmp/httpinteract_intermediar.js"])
-//# sourceMappingURL=httpinteract.js.map
+},{"./lib/source-map-consumer":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-map-consumer.js","./lib/source-map-generator":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-map-generator.js","./lib/source-node":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-node.js"}]},{},["/opt/new_swarm_engine_release/privatesky/builds/tmp/testsRuntime_intermediar.js"])
+//# sourceMappingURL=testsRuntime.js.map

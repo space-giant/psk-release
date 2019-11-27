@@ -1,1268 +1,2644 @@
-httpinteractRequire=(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({"/opt/new_swarm_engine_release/privatesky/builds/tmp/httpinteract_intermediar.js":[function(require,module,exports){
+edfsBarRequire=(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({"/opt/new_swarm_engine_release/privatesky/builds/tmp/edfsBar_intermediar.js":[function(require,module,exports){
 (function (global){
-global.httpinteractLoadModules = function(){ 
+global.edfsBarLoadModules = function(){ 
 	$$.__runtimeModules["source-map-support"] = require("source-map-support");
 	$$.__runtimeModules["source-map"] = require("source-map");
 	$$.__runtimeModules["buffer-from"] = require("buffer-from");
-	$$.__runtimeModules["interact"] = require("interact");
+	$$.__runtimeModules["bar"] = require("bar");
 	$$.__runtimeModules["psk-http-client"] = require("psk-http-client");
-	$$.__runtimeModules["swarmutils"] = require("swarmutils");
-	$$.__runtimeModules["foldermq"] = require("foldermq");
+	$$.__runtimeModules["edfs-brick-storage"] = require("edfs-brick-storage");
+	$$.__runtimeModules["bar-fs-adapter"] = require("bar-fs-adapter");
 }
 if (false) {
-	httpinteractLoadModules();
+	edfsBarLoadModules();
 }; 
-global.httpinteractRequire = require;
+global.edfsBarRequire = require;
 if (typeof $$ !== "undefined") {            
-    $$.requireBundle("httpinteract");
+    $$.requireBundle("edfsBar");
     };
     require('source-map-support').install({});
     
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
-},{"buffer-from":"buffer-from","foldermq":"foldermq","interact":"interact","psk-http-client":"psk-http-client","source-map":"source-map","source-map-support":"source-map-support","swarmutils":"swarmutils"}],"/opt/new_swarm_engine_release/privatesky/modules/foldermq/lib/folderMQ.js":[function(require,module,exports){
-const utils = require("swarmutils");
-const OwM = utils.OwM;
-var beesHealer = utils.beesHealer;
-var fs = require("fs");
-var path = require("path");
+},{"bar":"bar","bar-fs-adapter":"bar-fs-adapter","buffer-from":"buffer-from","edfs-brick-storage":"edfs-brick-storage","psk-http-client":"psk-http-client","source-map":"source-map","source-map-support":"source-map-support"}],"/opt/new_swarm_engine_release/privatesky/modules/bar-fs-adapter/lib/FsAdapter.js":[function(require,module,exports){
+(function (Buffer){
+const fs = require('fs');
+const path = require('path');
+const PathAsyncIterator = require('./PathAsyncIterator');
 
+function FsAdapter() {
 
-//TODO: prevent a class of race condition type of errors by signaling with files metadata to the watcher when it is safe to consume
+    let pathAsyncIterator;
 
-function FolderMQ(folder, callback = () => {}){
-
-	if(typeof callback !== "function"){
-		throw new Error("Second parameter should be a callback function");
-	}
-
-	folder = path.normalize(folder);
-
-	fs.mkdir(folder, {recursive: true}, function(err, res){
-		fs.exists(folder, function(exists) {
-			if (exists) {
-				return callback(null, folder);
-			} else {
-				return callback(err);
-			}
-		});
-	});
-
-	function mkFileName(swarmRaw){
-		let meta = OwM.prototype.getMetaFrom(swarmRaw);
-		let name = `${folder}${path.sep}${meta.swarmId}.${meta.swarmTypeName}`;
-		const unique = meta.phaseId || $$.uidGenerator.safe_uuid();
-
-		name = name+`.${unique}`;
-		return path.normalize(name);
-	}
-
-	this.getHandler = function(){
-		if(producer){
-			throw new Error("Only one consumer is allowed!");
-		}
-		producer = true;
-		return {
-			sendSwarmSerialization: function(serialization, callback){
-				if(typeof callback !== "function"){
-					throw new Error("Second parameter should be a callback function");
-				}
-				writeFile(mkFileName(JSON.parse(serialization)), serialization, callback);
-			},
-			addStream : function(stream, callback){
-				if(typeof callback !== "function"){
-					throw new Error("Second parameter should be a callback function");
-				}
-
-				if(!stream || !stream.pipe || typeof stream.pipe !== "function"){
-					return callback(new Error("Something wrong happened"));
-				}
-
-				let swarm = "";
-				stream.on('data', (chunk) =>{
-					swarm += chunk;
-				});
-
-				stream.on("end", () => {
-					writeFile(mkFileName(JSON.parse(swarm)), swarm, callback);
-				});
-
-				stream.on("error", (err) =>{
-					callback(err);
-				});
-			},
-			addSwarm : function(swarm, callback){
-				if(!callback){
-					callback = $$.defaultErrorHandlingImplementation;
-				}else if(typeof callback !== "function"){
-					throw new Error("Second parameter should be a callback function");
-				}
-
-				beesHealer.asJSON(swarm,null, null, function(err, res){
-					if (err) {
-						console.log(err);
-					}
-					writeFile(mkFileName(res), J(res), callback);
-				});
-			},
-			sendSwarmForExecution: function(swarm, callback){
-				if(!callback){
-					callback = $$.defaultErrorHandlingImplementation;
-				}else if(typeof callback !== "function"){
-					throw new Error("Second parameter should be a callback function");
-				}
-
-				beesHealer.asJSON(swarm, OwM.prototype.getMetaFrom(swarm, "phaseName"), OwM.prototype.getMetaFrom(swarm, "args"), function(err, res){
-					if (err) {
-						console.log(err);
-					}
-					var file = mkFileName(res);
-					var content = JSON.stringify(res);
-
-					//if there are no more FD's for files to be written we retry.
-					function wrapper(error, result){
-						if(error){
-							console.log(`Caught an write error. Retry to write file [${file}]`);
-							setTimeout(()=>{
-								writeFile(file, content, wrapper);
-							}, 10);
-						}else{
-							return callback(error, result);
-						}
-					}
-
-					writeFile(file, content, wrapper);
-				});
-			}
-		};
-	};
-
-	var recipient;
-	this.setIPCChannel = function(processChannel){
-		if(processChannel && !processChannel.send || (typeof processChannel.send) != "function"){
-			throw new Error("Recipient is not instance of process/child_process or it was not spawned with IPC channel!");
-		}
-		recipient = processChannel;
-		if(consumer){
-			console.log(`Channel updated`);
-			(recipient || process).on("message", receiveEnvelope);
-		}
-	};
-
-
-	var consumedMessages = {};
-
-	function checkIfConsummed(name, message){
-		const shortName = path.basename(name);
-		const previousSaved = consumedMessages[shortName];
-		let result = false;
-		if(previousSaved && !previousSaved.localeCompare(message)){
-			result = true;
-		}
-		return result;
-	}
-
-	function save2History(envelope){
-		consumedMessages[path.basename(envelope.name)] = envelope.message;
-	}
-
-	function buildEnvelopeConfirmation(envelope, saveHistory){
-		if(saveHistory){
-			save2History(envelope);
-		}
-		return `Confirm envelope ${envelope.timestamp} sent to ${envelope.dest}`;
-	}
-
-	function buildEnvelope(name, message){
-		return {
-			dest: folder,
-			src: process.pid,
-			timestamp: new Date().getTime(),
-			message: message,
-			name: name
-		};
-	}
-
-	function receiveEnvelope(envelope){
-		if(!envelope || typeof envelope !== "object"){
-			return;
-		}
-		//console.log("received envelope", envelope, folder);
-
-		if(envelope.dest !== folder && folder.indexOf(envelope.dest)!== -1 && folder.length === envelope.dest+1){
-			console.log("This envelope is not for me!");
-			return;
-		}
-
-		let message = envelope.message;
-
-		if(callback){
-			//console.log("Sending confirmation", process.pid);
-			recipient.send(buildEnvelopeConfirmation(envelope, true));
-			consumer(null, JSON.parse(message));
-		}
-	}
-
-	this.registerAsIPCConsumer = function(callback){
-		if(typeof callback !== "function"){
-			throw new Error("The argument should be a callback function");
-		}
-		registeredAsIPCConsumer = true;
-		//will register as normal consumer in order to consume all existing messages but without setting the watcher
-		this.registerConsumer(callback, true, (watcher) => !watcher);
-
-		//console.log("Registered as IPC Consummer", );
-		(recipient || process).on("message", receiveEnvelope);
-	};
-
-	this.registerConsumer = function (callback, shouldDeleteAfterRead = true, shouldWaitForMore = (watcher) => true) {
-		if(typeof callback !== "function"){
-			throw new Error("First parameter should be a callback function");
-		}
-		if (consumer) {
-			throw new Error("Only one consumer is allowed! " + folder);
-		}
-
-		consumer = callback;
-
-		fs.mkdir(folder, {recursive: true}, function (err, res) {
-			if (err && (err.code !== 'EEXIST')) {
-				console.log(err);
-			}
-			consumeAllExisting(shouldDeleteAfterRead, shouldWaitForMore);
-		});
-	};
-
-	this.writeMessage = writeFile;
-
-	this.unlinkContent = function (messageId, callback) {
-		const messagePath = path.join(folder, messageId);
-
-		fs.unlink(messagePath, (err) => {
-			callback(err);
-		});
-	};
-
-	this.dispose = function(force){
-		if(typeof folder != "undefined"){
-			var files;
-			try{
-				files = fs.readdirSync(folder);
-			}catch(error){
-				//..
-			}
-
-			if(files && files.length > 0 && !force){
-				console.log("Disposing a channel that still has messages! Dir will not be removed!");
-				return false;
-			}else{
-				try{
-					fs.rmdirSync(folder);
-				}catch(err){
-					//..
-				}
-			}
-
-			folder = null;
-		}
-
-		if(producer){
-			//no need to do anything else
-		}
-
-		if(typeof consumer != "undefined"){
-			consumer = () => {};
-		}
-
-		if(watcher){
-			watcher.close();
-			watcher = null;
-		}
-
-		return true;
-	};
-
-
-	/* ---------------- protected  functions */
-	var consumer = null;
-	var registeredAsIPCConsumer = false;
-	var producer = null;
-
-	function buildPathForFile(filename){
-		return path.normalize(path.join(folder, filename));
-	}
-
-	function consumeMessage(filename, shouldDeleteAfterRead, callback) {
-		var fullPath = buildPathForFile(filename);
-
-		fs.readFile(fullPath, "utf8", function (err, data) {
-			if (!err) {
-				if (data !== "") {
-					try {
-						var message = JSON.parse(data);
-					} catch (error) {
-						console.log("Parsing error", error);
-						err = error;
-					}
-
-					if(checkIfConsummed(fullPath, data)){
-						//console.log(`message already consumed [${filename}]`);
-						return ;
-					}
-
-					if (shouldDeleteAfterRead) {
-
-						fs.unlink(fullPath, function (err, res) {
-							if (err) {throw err;};
-						});
-
-					}
-					return callback(err, message);
-				}
-			} else {
-				console.log("Consume error", err);
-				return callback(err);
-			}
-		});
-	}
-
-	function consumeAllExisting(shouldDeleteAfterRead, shouldWaitForMore) {
-
-		let currentFiles = [];
-
-		fs.readdir(folder, 'utf8', function (err, files) {
-			if (err) {
-				$$.errorHandler.error(err);
-				return;
-			}
-			currentFiles = files;
-			iterateAndConsume(files);
-
-		});
-
-		function startWatching(){
-			if (shouldWaitForMore(true)) {
-				watchFolder(shouldDeleteAfterRead, shouldWaitForMore);
-			}
-		}
-
-		function iterateAndConsume(files, currentIndex = 0) {
-			if (currentIndex === files.length) {
-				//console.log("start watching", new Date().getTime());
-				startWatching();
-				return;
-			}
-
-			if (path.extname(files[currentIndex]) !== in_progress) {
-				consumeMessage(files[currentIndex], shouldDeleteAfterRead, (err, data) => {
-					if (err) {
-						iterateAndConsume(files, ++currentIndex);
-						return;
-					}
-					consumer(null, data, path.basename(files[currentIndex]));
-					if (shouldWaitForMore()) {
-						iterateAndConsume(files, ++currentIndex);
-					}
-				});
-			} else {
-				iterateAndConsume(files, ++currentIndex);
-			}
-		}
-	}
-
-	function writeFile(filename, content, callback){
-		if(recipient){
-			var envelope = buildEnvelope(filename, content);
-			//console.log("Sending to", recipient.pid, recipient.ppid, "envelope", envelope);
-			recipient.send(envelope);
-			var confirmationReceived = false;
-
-			function receiveConfirmation(message){
-				if(message === buildEnvelopeConfirmation(envelope)){
-					//console.log("Received confirmation", recipient.pid);
-					confirmationReceived = true;
-					try{
-						recipient.off("message", receiveConfirmation);
-					}catch(err){
-						//...
-					}
-
-				}
-			}
-
-			recipient.on("message", receiveConfirmation);
-
-			setTimeout(()=>{
-				if(!confirmationReceived){
-					//console.log("No confirmation...", process.pid);
-					hidden_writeFile(filename, content, callback);
-				}else{
-					if(callback){
-						return callback(null, content);
-					}
-				}
-			}, 200);
-		}else{
-			hidden_writeFile(filename, content, callback);
-		}
-	}
-
-	const in_progress = ".in_progress";
-	function hidden_writeFile(filename, content, callback){
-		var tmpFilename = filename+in_progress;
-		try{
-			if(fs.existsSync(tmpFilename) || fs.existsSync(filename)){
-				console.log(new Error(`Overwriting file ${filename}`));
-			}
-			fs.writeFileSync(tmpFilename, content);
-			fs.renameSync(tmpFilename, filename);
-		}catch(err){
-			return callback(err);
-		}
-		callback(null, content);
-	}
-
-	var alreadyKnownChanges = {};
-
-	function alreadyFiredChanges(filename, change){
-		var res = false;
-		if(alreadyKnownChanges[filename]){
-			res = true;
-		}else{
-			alreadyKnownChanges[filename] = change;
-		}
-
-		return res;
-	}
-
-	function watchFolder(shouldDeleteAfterRead, shouldWaitForMore){
-
-		setTimeout(function(){
-			fs.readdir(folder, 'utf8', function (err, files) {
-				if (err) {
-					$$.errorHandler.error(err);
-					return;
-				}
-
-				for(var i=0; i<files.length; i++){
-					watchFilesHandler("change", files[i]);
-				}
-			});
-		}, 1000);
-
-		function watchFilesHandler(eventType, filename){
-			//console.log(`Got ${eventType} on ${filename}`);
-
-			if(!filename || path.extname(filename) === in_progress){
-				//caught a delete event of a file
-				//or
-				//file not ready to be consumed (in progress)
-				return;
-			}
-
-			var f = buildPathForFile(filename);
-			if(!fs.existsSync(f)){
-				//console.log("File not found", f);
-				return;
-			}
-
-			//console.log(`Preparing to consume ${filename}`);
-			if(!alreadyFiredChanges(filename, eventType)){
-				consumeMessage(filename, shouldDeleteAfterRead, (err, data) => {
-					//allow a read a the file
-					alreadyKnownChanges[filename] = undefined;
-
-					if (err) {
-						// ??
-						console.log("\nCaught an error", err);
-						return;
-					}
-
-					consumer(null, data, filename);
-
-
-					if (!shouldWaitForMore()) {
-						watcher.close();
-					}
-				});
-			}else{
-				console.log("Something happens...", filename);
-			}
-		}
-
-
-		const watcher = fs.watch(folder, watchFilesHandler);
-
-		const intervalTimer = setInterval(()=>{
-			fs.readdir(folder, 'utf8', function (err, files) {
-				if (err) {
-					$$.errorHandler.error(err);
-					return;
-				}
-
-				if(files.length > 0){
-					console.log(`\n\nFound ${files.length} files not consumed yet in ${folder}`, new Date().getTime(),"\n\n");
-					//faking a rename event trigger
-					watchFilesHandler("rename", files[0]);
-				}
-			});
-		}, 5000);
-	}
-}
-
-exports.getFolderQueue = function(folder, callback){
-	return new FolderMQ(folder, callback);
-};
-
-},{"fs":false,"path":false,"swarmutils":"swarmutils"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/SoundPubSubMQBasedInteractionSpace.js":[function(require,module,exports){
-function MemoryMQInteractionSpace() {
-    var swarmInteract = require("./../swarmInteraction");
-    var swarmHandlersSubscribers = {};
-
-    function dispatchingSwarms(swarm){
-		setTimeout(function(){
-            var subsList = swarmHandlersSubscribers[swarm.meta.swarmId];
-            if(subsList){
-                for(var i=0; i<subsList.length; i++){
-                    var handler = subsList[i];
-                    handler(null, swarm);
-                }
-            }
-        }, 1);
-    }
-
-    var initialized = false;
-    function init(){
-		if(!initialized){
-			initialized = true;
-			$$.PSK_PubSub.subscribe($$.CONSTANTS.SWARM_FOR_EXECUTION, dispatchingSwarms);
-		}
-    }
-
-    var comm = {
-        startSwarm: function (swarmName, ctor, args) {
-			init();
-            return $$.swarm.start(swarmName, ctor, ...args);
-        },
-        continueSwarm: function (swarmHandler, swarmSerialisation, ctor, args) {
-			init();
-            swarmHandler[ctor].apply(swarmHandler, args);
-        },
-        on: function (swarmHandler, callback) {
-			init();
-            if(!swarmHandlersSubscribers[swarmHandler.getInnerValue().meta.swarmId]){
-				swarmHandlersSubscribers[swarmHandler.getInnerValue().meta.swarmId] = [ callback ];
-            }else{
-				swarmHandlersSubscribers[swarmHandler.getInnerValue().meta.swarmId].push(callback);
-            }
-        },
-        off: function (swarmHandler) {
-			if(swarmHandlersSubscribers[swarmHandler.getInnerValue().meta.swarmId]){
-				swarmHandlersSubscribers[swarmHandler.getInnerValue().meta.swarmId] = [];
-            }
-        }
-    };
-
-    return swarmInteract.newInteractionSpace(comm);
-
-}
-
-var space;
-module.exports.createInteractionSpace = function () {
-    if(!space){
-        space = new MemoryMQInteractionSpace();
-    }else{
-        console.log("MemoryMQInteractionSpace already created! Using same instance.");
-    }
-    return space;
-};
-},{"./../swarmInteraction":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/WebViewMQInteractionSpace.js":[function(require,module,exports){
-function WindowMQInteractionSpace(channelName, communicationWindow, secondCommunicationChannel){
-    var swarmInteract = require("./../swarmInteraction");
-    var childMessageMQ = require("./specificMQImpl/ChildWebViewMQ").createMQ(channelName, communicationWindow, secondCommunicationChannel);
-    var swarmInstances = {};
-
-    var comm = {
-        startSwarm: function (swarmName, ctor, args) {
-            var swarm = {meta:{
-                    swarmTypeName:swarmName,
-                    ctor:ctor,
-                    args:args
-                }};
-            childMessageMQ.produce(swarm);
-            return swarm;
-        },
-        continueSwarm: function (swarmHandler, swarmSerialisation, phaseName, args) {
-
-            var newSerialization = JSON.parse(JSON.stringify(swarmSerialisation));
-            newSerialization.meta.ctor = undefined;
-            newSerialization.meta.phaseName = phaseName;
-            newSerialization.meta.target = "iframe";
-            newSerialization.meta.args = args;
-            childMessageMQ.produce(newSerialization);
-        },
-        on: function (swarmHandler, callback) {
-            childMessageMQ.registerConsumer(callback);
-        },
-        off: function (swarmHandler) {
-
-        }
-    };
-
-
-    var space = swarmInteract.newInteractionSpace(comm);
-    this.startSwarm = function (name, ctor, ...args) {
-        return space.startSwarm(name, ctor, ...args);
-    };
-
-    this.init = function () {
-
-        childMessageMQ.registerConsumer(function (err, data) {
+    this.getFileSize = function (filePath, callback) {
+        fs.stat(filePath, (err, stats) => {
             if (err) {
-                console.log(err);
+                return callback(err);
             }
-            else {
-                var swarm;
-                if(data && data.meta && data.meta.swarmId && swarmInstances[data.meta.swarmId]){
-                    swarm = swarmInstances[data.meta.swarmId];
-                    swarm.update(data);
-                    swarm[data.meta.phaseName].apply(swarm, data.meta.args);
-                }else{
 
-                    swarm = $$.swarm.start(data.meta.swarmTypeName, data.meta.ctor, ...data.meta.args);
-
-                    swarmInstances[swarm.getInnerValue().meta.swarmId] = swarm;
-
-                    swarm.onReturn(function(data){
-                        console.log("Swarm is finished");
-                        console.log(data);
-                    });
-                }
-            }
+            callback(undefined, stats.size);
         });
-        const readyEvt = {webViewIsReady: true};
-        parent.postMessage(JSON.stringify(readyEvt), "*");
-
     };
 
-    function handler(message){
-        log("sending swarm ", message);
-        childMessageMQ.produce(message);
-    }
-
-    function filterInteractions(message){
-        log("checking if message is 'interaction' ", message);
-        return message && message.meta && message.meta.target && message.meta.target === "interaction";
-    }
-    //TODO fix this for nativeWebView
-
-    $$.PSK_PubSub.subscribe($$.CONSTANTS.SWARM_FOR_EXECUTION, handler, function(){return true;}, filterInteractions);
-
-    log("registering listener for handling interactions");
-
-    function log(...args){
-        args.unshift("[WindowMQInteractionSpace"+(window.frameElement ? "*": "")+"]" );
-        //console.log.apply(this, args);
-    }
-}
-
-module.exports.createInteractionSpace = function(channelName, communicationWindow, secondCommunicationChannel){
-    return new WindowMQInteractionSpace(channelName, communicationWindow, secondCommunicationChannel);
-};
-},{"./../swarmInteraction":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js","./specificMQImpl/ChildWebViewMQ":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWebViewMQ.js"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/WindowMQInteractionSpace.js":[function(require,module,exports){
-/*TODO
-For the moment I don't see any problems if it's not cryptographic safe.
-This version keeps  compatibility with mobile browsers/webviews.
- */
-function uuidv4() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
-
-function WindowMQInteractionSpace(channelName, communicationWindow) {
-    var swarmInteract = require("./../swarmInteraction");
-    var childMessageMQ = require("./specificMQImpl/ChildWndMQ").createMQ(channelName, communicationWindow);
-    var swarmInstances = {};
-
-    var comm = {
-        startSwarm: function (swarmName, ctor, args) {
-
-            var uniqueId = uuidv4();
-            var swarm = {
-                meta: {
-                    swarmTypeName: swarmName,
-                    ctor: ctor,
-                    args: args,
-                    requestId: uniqueId,
-                }
-            };
-            childMessageMQ.produce(swarm);
-            return swarm;
-        },
-        continueSwarm: function (swarmHandler, swarmSerialisation, phaseName, args) {
-
-            var newSerialization = JSON.parse(JSON.stringify(swarmSerialisation));
-            newSerialization.meta.ctor = undefined;
-            newSerialization.meta.phaseName = phaseName;
-            newSerialization.meta.target = "iframe";
-            newSerialization.meta.args = args;
-            childMessageMQ.produce(newSerialization);
-        },
-        on: function (swarmHandler, callback) {
-            childMessageMQ.registerCallback(swarmHandler.meta.requestId, callback);
-        },
-        off: function (swarmHandler) {
-            console.log("Function not implemented!");
-        }
-    };
-
-
-    var space = swarmInteract.newInteractionSpace(comm);
-    this.startSwarm = function (name, ctor, ...args) {
-        return space.startSwarm(name, ctor, ...args);
-    };
-
-    this.init = function () {
-
-        childMessageMQ.registerConsumer(function (err, data) {
-            if (err) {
-                console.log(err);
-            }
-            else {
-                var swarm;
-                if (data && data.meta && data.meta.swarmId && swarmInstances[data.meta.swarmId]) {
-                    swarm = swarmInstances[data.meta.swarmId];
-                    swarm.update(data);
-                    swarm[data.meta.phaseName].apply(swarm, data.meta.args);
-                } else {
-
-                    swarm = $$.swarm.start(data.meta.swarmTypeName, data.meta.ctor, ...data.meta.args);
-                    swarm.setMetadata("requestId", data.meta.requestId);
-                    swarmInstances[swarm.getInnerValue().meta.swarmId] = swarm;
-
-                    swarm.onReturn(function (data) {
-                        console.log("Swarm is finished");
-                        console.log(data);
-                    });
-                }
-            }
+    this.readBlockFromFile = function (filePath, blockStart, blockEnd, callback) {
+        const readStream = fs.createReadStream(filePath, {
+            start: blockStart,
+            end: blockEnd
         });
-        parent.postMessage({webViewIsReady: true}, "*");
+
+        let data = Buffer.alloc(0);
+
+        readStream.on("data", (chunk) => {
+            data = Buffer.concat([data, chunk]);
+        });
+
+        readStream.on("error", (err) => {
+            callback(err);
+        });
+
+        readStream.on("end", () => {
+            callback(undefined, data);
+        });
     };
 
-    function handler(message) {
-        log("sending swarm ", message);
-        childMessageMQ.produce(message);
-    }
-
-    function filterInteractions(message) {
-        log("checking if message is 'interaction' ", message);
-        return message && message.meta && message.meta.target && message.meta.target === "interaction";
-    }
-
-    $$.PSK_PubSub.subscribe($$.CONSTANTS.SWARM_FOR_EXECUTION, handler, function () {
-        return true;
-    }, filterInteractions);
-    log("registering listener for handling interactions");
-
-    function log(...args) {
-        args.unshift("[WindowMQInteractionSpace" + (window.frameElement ? "*" : "") + "]");
-        //console.log.apply(this, args);
-    }
-}
-
-module.exports.createInteractionSpace = function (channelName, communicationWindow) {
-    return new WindowMQInteractionSpace(channelName, communicationWindow);
-};
-
-},{"./../swarmInteraction":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js","./specificMQImpl/ChildWndMQ":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ.js"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/folderMQBasedInteractionSpace.js":[function(require,module,exports){
-var OwM = require("swarmutils").OwM;
-var swarmInteract = require("./../swarmInteraction");
-var folderMQ = require("foldermq");
-
-function FolderMQInteractionSpace(agent, targetFolder, returnFolder) {
-    var swarmHandlersSubscribers = {};
-    var queueHandler = null;
-    var responseQueue = null;
-
-    var queue = folderMQ.createQue(targetFolder, (err , result) => {
-        if(err){
-           throw err;
+    this.getNextFile = function (inputPath, restart, callback) {
+        if(typeof restart === "function") {
+            callback = restart;
+            restart = false;
         }
-    });
 
-    function createSwarmPack(swarmName, phaseName, ...args){
-        var swarm = new OwM();
-
-        swarm.setMeta("swarmId", $$.uidGenerator.safe_uuid());
-
-        swarm.setMeta("requestId", swarm.getMeta("swarmId"));
-        swarm.setMeta("swarmTypeName", swarmName);
-        swarm.setMeta("phaseName", phaseName);
-        swarm.setMeta("args", args);
-        swarm.setMeta("command", "executeSwarmPhase");
-        swarm.setMeta("target", agent);
-        swarm.setMeta("homeSecurityContext", returnFolder);
-
-        return swarm;
-    }
-
-    function dispatchingSwarms(err, swarm){
-        if (err) {
-            console.log(err);
+        if(restart === true) {
+            pathAsyncIterator = new PathAsyncIterator(inputPath);
         }
-		setTimeout(function(){
-            var subsList = swarmHandlersSubscribers[swarm.meta.swarmId];
-            if(subsList){
-                for(var i=0; i<subsList.length; i++){
-                    let handler = subsList[i];
-                    handler(null, swarm);
+
+        pathAsyncIterator = pathAsyncIterator || new PathAsyncIterator(inputPath);
+        pathAsyncIterator.next(callback);
+    };
+
+    this.appendBlockToFile = function (filePath, data, callback) {
+        const pth = constructPath(filePath);
+        if (pth !== '') {
+            fs.mkdir(pth, {recursive: true}, (err) => {
+                if (err && err.code !== "EEXIST") {
+                    return callback(err);
                 }
-            }
-        }, 1);
-    }
 
-    function init(){
-        if(!queueHandler){
-            queueHandler = queue.getHandler();
-        }
-    }
-	
-	init();
-
-    function prepareToConsume(){
-        if(!responseQueue){
-            responseQueue = folderMQ.createQue(returnFolder);
-            responseQueue.registerConsumer(dispatchingSwarms);
-        }
-    }
-
-    var communication = {
-        startSwarm: function (swarmName, ctor, args) {
-            prepareToConsume();
-            var swarm = createSwarmPack(swarmName, ctor, ...args);
-            queueHandler.sendSwarmForExecution(swarm);
-            return swarm;
-        },
-        continueSwarm: function (swarmHandler, swarmSerialisation, ctor, ...args) {
-            try{
-                swarmHandler.update(swarmSerialisation);
-                swarmHandler[ctor].apply(swarmHandler, args);
-            }catch(err){
-                console.log(err);
-            }
-        },
-        on: function (swarmHandler, callback) {
-            prepareToConsume();
-
-            if(!swarmHandlersSubscribers[swarmHandler.meta.swarmId]){
-                swarmHandlersSubscribers[swarmHandler.meta.swarmId] = [];
-            }
-            swarmHandlersSubscribers[swarmHandler.meta.swarmId].push(callback);
-
-        },
-        off: function (swarmHandler) {
-            swarmHandlersSubscribers[swarmHandler.meta.swarmId] = [];
-        }
-    };
-
-    return swarmInteract.newInteractionSpace(communication);
-}
-
-var spaces = {};
-
-module.exports.createInteractionSpace = function (agent, targetFolder, returnFolder) {
-    var index = targetFolder+returnFolder;
-    if(!spaces[index]){
-        spaces[index] = new FolderMQInteractionSpace(agent, targetFolder, returnFolder);
-    }else{
-        console.log(`FolderMQ interaction space based on [${targetFolder}, ${returnFolder}] already exists!`);
-    }
-    return spaces[index];
-};
-},{"./../swarmInteraction":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js","foldermq":"foldermq","swarmutils":"swarmutils"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/httpInteractionSpace.js":[function(require,module,exports){
-require('psk-http-client');
-
-function HTTPInteractionSpace(alias, remoteEndPoint, agentUid, cryptoInfo) {
-    const swarmInteract = require("./../swarmInteraction");
-
-    let initialized = false;
-    function init(){
-        if(!initialized){
-            initialized = true;
-            $$.remote.createRequestManager();
-            $$.remote.newEndPoint(alias, remoteEndPoint, agentUid, cryptoInfo);
-        }
-    }
-
-    const comm = {
-        startSwarm: function (swarmName, ctor, args) {
-            init();
-            return $$.remote[alias].startSwarm(swarmName, ctor, ...args);
-        },
-        continueSwarm: function (swarmHandler, swarmSerialisation, ctor, args) {
-            return $$.remote[alias].continueSwarm(swarmSerialisation, ctor, args);
-        },
-        on: function (swarmHandler, callback) {
-            swarmHandler.on('*', callback);
-        },
-        off: function (swarmHandler) {
-            swarmHandler.off('*');
-        }
-    };
-
-    return swarmInteract.newInteractionSpace(comm);
-}
-
-module.exports.createInteractionSpace = function (alias, remoteEndPoint, agentUid, cryptoInfo) {
-    //singleton
-    return new HTTPInteractionSpace(alias, remoteEndPoint, agentUid, cryptoInfo);
-};
-},{"./../swarmInteraction":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js","psk-http-client":"psk-http-client"}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWebViewMQ.js":[function(require,module,exports){
-(function (global){
-var channelsRegistry = {}; //keeps callbacks for consumers and windows references for producers
-var callbacksRegistry = {};
-
-function dispatchEvent(event) {
-    var swarm = JSON.parse(event.data);
-    if(swarm.meta){
-        var callback = callbacksRegistry[swarm.meta.channelName];
-        if (callback) {
-            return callback(null, swarm);
+                fs.appendFile(filePath, data, callback);
+            });
         } else {
-            throw new Error("");
+            fs.appendFile(filePath, data, callback);
         }
-    }
-
-}
-
-
-function ChildWndMQ(channelName, mainWindow, secondCommunicationChannel) {
-    //channel name is
-
-    channelsRegistry[channelName] = mainWindow;
-
-    this.produce = function (swarmMsg) {
-        swarmMsg.meta.channelName = channelName;
-        var message = {
-            meta:swarmMsg.meta,
-            publicVars:swarmMsg.publicVars,
-            privateVars:swarmMsg.privateVars
-        };
-
-        message.meta.args = message.meta.args.map(function (argument) {
-            if (argument instanceof Error) {
-                var error = {};
-                if (argument.message) {
-                    error["message"] = argument.message;
-                }
-                if (argument.code) {
-                    error["code"] = argument.code;
-                }
-                return error;
-            }
-            return argument;
-        });
-        mainWindow.postMessage(JSON.stringify(message), "*");
     };
 
-    var consumer;
-
-    this.registerConsumer = function (callback, shouldDeleteAfterRead = true) {
-        if (typeof callback !== "function") {
-            throw new Error("First parameter should be a callback function");
-        }
-        if (consumer) {
-           // throw new Error("Only one consumer is allowed!");
-        }
-
-        consumer = callback;
-        callbacksRegistry[channelName] = consumer;
-
-        if (secondCommunicationChannel && typeof secondCommunicationChannel.addEventListener !== "undefined") {
-            secondCommunicationChannel.addEventListener("message", dispatchEvent);
-        }
-      };
-}
-
-
-module.exports.createMQ = function createMQ(channelName, wnd, secondCommunicationChannel){
-    return new ChildWndMQ(channelName, wnd, secondCommunicationChannel);
-};
-
-
-module.exports.initForSwarmingInChild = function(domainName){
-
-    var pubSub = $$.require("soundpubsub").soundPubSub;
-
-    var inbound = createMQ(domainName+"/inbound");
-    var outbound = createMQ(domainName+"/outbound");
-
-
-    inbound.registerConsumer(function(err, swarm){
-        if (err) {
-            console.log(err);
-        }
-        //restore and execute this tasty swarm
-        global.$$.swarmsInstancesManager.revive_swarm(swarm);
-    });
-
-    pubSub.subscribe($$.CONSTANTS.SWARM_FOR_EXECUTION, function(swarm){
-        outbound.sendSwarmForExecution(swarm);
-    });
-};
-
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ.js":[function(require,module,exports){
-(function (global){
-var channelsRegistry = {}; //keeps callbacks for consumers and windows references for producers
-var callbacksRegistry = {};
-var swarmCallbacks = {};
-
-function dispatchEvent(event) {
-
-    if (event.source !== window) {
-
-        var swarm = event.data;
-
-        if (swarm.meta) {
-            let callback;
-            if (!swarm.meta.requestId || !swarmCallbacks[swarm.meta.requestId]) {
-                callback = callbacksRegistry[swarm.meta.channelName];
-            }
-            else {
-                callback = swarmCallbacks[swarm.meta.requestId];
-            }
-
-            if (callback) {
-                return callback(null, swarm);
-            } else {
-                throw new Error("");
-            }
-
-        }
-    }
-}
-
-
-function ChildWndMQ(channelName, mainWindow) {
-    //channel name is
-
-    channelsRegistry[channelName] = mainWindow;
-
-    this.produce = function (swarmMsg) {
-        swarmMsg.meta.channelName = channelName;
-        var message = {
-            meta: swarmMsg.meta,
-            publicVars: swarmMsg.publicVars,
-            privateVars: swarmMsg.privateVars
-        };
-        //console.log(swarmMsg.getJSON());
-        //console.log(swarmMsg.valueOf());
-        message.meta.args = message.meta.args.map(function (argument) {
-            if (argument instanceof Error) {
-                var error = {};
-                if (argument.message) {
-                    error["message"] = argument.message;
-                }
-                if (argument.code) {
-                    error["code"] = argument.code;
-                }
-                return error;
-            }
-            return argument;
-        });
-        mainWindow.postMessage(message, "*");
-    };
-
-    var consumer;
-
-    this.registerConsumer = function (callback, shouldDeleteAfterRead = true) {
-        if (typeof callback !== "function") {
-            throw new Error("First parameter should be a callback function");
-        }
-        if (consumer) {
-            // throw new Error("Only one consumer is allowed!");
-        }
-
-        consumer = callback;
-        callbacksRegistry[channelName] = consumer;
-        mainWindow.addEventListener("message", dispatchEvent);
-    };
-
-    this.registerCallback = function (requestId, callback) {
-        swarmCallbacks[requestId] = callback;
-        callbacksRegistry[channelName] = callback;
-        mainWindow.addEventListener("message", dispatchEvent);
-    };
-
-}
-
-
-module.exports.createMQ = function createMQ(channelName, wnd) {
-    return new ChildWndMQ(channelName, wnd);
-};
-
-
-module.exports.initForSwarmingInChild = function (domainName) {
-
-    var pubSub = $$.require("soundpubsub").soundPubSub;
-
-    var inbound = createMQ(domainName + "/inbound");
-    var outbound = createMQ(domainName + "/outbound");
-
-
-    inbound.registerConsumer(function (err, swarm) {
-        if (err) {
-            console.log(err);
-        }
-        //restore and execute this tasty swarm
-        global.$$.swarmsInstancesManager.revive_swarm(swarm);
-    });
-
-    pubSub.subscribe($$.CONSTANTS.SWARM_FOR_EXECUTION, function (swarm) {
-        outbound.sendSwarmForExecution(swarm);
-    });
-};
-
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/swarmInteraction.js":[function(require,module,exports){
-if (typeof $$ == "undefined") {
-    $$ = {};
-}
-
-function VirtualSwarm(innerObj, globalHandler){
-    let knownExtraProps = [ "swarm" ];
-
-    function buildHandler() {
-        var utility = {};
-        return {
-            set: function (target, property, value, receiver) {
-                switch (true) {
-                    case target.privateVars && target.privateVars.hasOwnProperty(property):
-                        target.privateVars[property] = value;
-                        break;
-                    case target.publicVars && target.publicVars.hasOwnProperty(property):
-                        target.publicVars[property] = value;
-                        break;
-                    case target.hasOwnProperty(property):
-                        target[property] = value;
-                        break;
-                    case knownExtraProps.indexOf(property) === -1:
-                        if (!globalHandler.protected) {
-                            globalHandler.protected = {};
-                        }
-                        globalHandler.protected[property] = value;
-                        break;
-                    default:
-                        utility[property] = value;
-                }
-                return true;
-            },
-            get: function (target, property, receiver) {
-
-                switch (true) {
-                    case target.publicVars && target.publicVars.hasOwnProperty(property):
-                        return target.publicVars[property];
-                    case target.privateVars && target.privateVars.hasOwnProperty(property):
-                        return target.privateVars[property];
-                    case target.hasOwnProperty(property):
-                        return target[property];
-                    case utility.hasOwnProperty(property):
-                        return utility[property];
-                    case globalHandler.protected && globalHandler.protected.hasOwnProperty(property):
-                        return globalHandler.protected[property];
-                    default:
-                        return undefined;
-                }
-            }
-        };
-    }
-
-    return new Proxy(innerObj, buildHandler());
-}
-
-function SwarmInteraction(communicationInterface, swarmName, ctor, args) {
-
-    var swarmHandler = communicationInterface.startSwarm(swarmName, ctor, args);
-
-    this.on = function(description){
-        communicationInterface.on(swarmHandler, function(err, swarmSerialisation){
+    this.writeBlockToFile = function (filePath, data, position, length, callback) {
+        const folderPath = path.dirname(filePath);
+        fs.access(folderPath, (err) => {
             if (err) {
-                console.log(err);
+                fs.mkdir(folderPath, {recursive: true}, (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    __writeBlock();
+                });
+            } else {
+                __writeBlock();
             }
-            let phase = description[swarmSerialisation.meta.phaseName];
-            let virtualSwarm = new VirtualSwarm(swarmSerialisation, swarmHandler);
+        });
 
-            if(!phase){
-                //TODO review and fix. Fix case when an interaction is started from another interaction
-                if(swarmHandler && (!swarmHandler.Target || swarmHandler.Target.swarmId !== swarmSerialisation.meta.swarmId)){
-                    console.log("Not my swarm!");
-                    return;
+        function __writeBlock() {
+            const writeStream = fs.createWriteStream(filePath, {flags: "a+", start: position});
+
+            writeStream.on("error", (err) => {
+                return callback(err);
+            });
+
+            writeStream.write(data, callback);
+        }
+    };
+
+    function constructPath(filePath) {
+        let slices = filePath.split(path.sep);
+        slices.pop();
+        return slices.join(path.sep);
+    }
+
+}
+
+module.exports = FsAdapter;
+}).call(this,require("buffer").Buffer)
+
+},{"./PathAsyncIterator":"/opt/new_swarm_engine_release/privatesky/modules/bar-fs-adapter/lib/PathAsyncIterator.js","buffer":false,"fs":false,"path":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar-fs-adapter/lib/PathAsyncIterator.js":[function(require,module,exports){
+const fs = require('fs');
+const path = require('path');
+const AsyncDispatcher = require("swarmutils").AsyncDispatcher;
+
+
+function PathAsyncIterator(inputPath) {
+    let removablePathLen;
+    const fileList = [];
+    const folderList = [];
+    let isFirstCall = true;
+    let pathIsFolder;
+
+    this.next = function (callback) {
+        if (isFirstCall === true) {
+            isDir(inputPath, (err, status) => {
+                if (err) {
+                    return callback(err);
                 }
-                var interactPhaseErr =  new Error("Interact method "+swarmSerialisation.meta.phaseName+" was not found.");
-                if(description["onError"]){
-                    description["onError"].call(virtualSwarm, interactPhaseErr);
-                    return;
+
+                isFirstCall = false;
+                pathIsFolder = status;
+                if (status === true) {
+                    const splitInputPath = inputPath.split(path.sep);
+                    splitInputPath.pop();
+                    removablePathLen = splitInputPath.join(path.sep).length;
+                    folderList.push(inputPath);
+                    getNextFileFromFolder(callback);
+                } else {
+                    callback(undefined, inputPath);
                 }
-                else{
-                    throw interactPhaseErr;
-                }
+            });
+        } else if (pathIsFolder) {
+            getNextFileFromFolder(callback);
+        } else {
+            callback();
+        }
+    };
+
+    function walkFolder(folderPath, callback) {
+        const asyncDispatcher = new AsyncDispatcher((errors, results) => {
+            if (fileList.length > 0) {
+                const fileName = fileList.shift();
+                return callback(undefined, fileName);
             }
 
-            virtualSwarm.swarm = function(phaseName, ...args){
-                communicationInterface.continueSwarm(swarmHandler, swarmSerialisation, phaseName, args);
-            };
+            if (folderList.length > 0) {
+                const folderName = folderList.shift();
+                return walkFolder(folderName, callback);
+            }
 
-            phase.apply(virtualSwarm, swarmSerialisation.meta.args);
-            if(virtualSwarm.meta.command === "asyncReturn"){
-                communicationInterface.off(swarmHandler);
+            return callback();
+        });
+
+        fs.readdir(folderPath, (err, files) => {
+            if (err) {
+                return callback(err);
+            }
+
+            if (files.length === 0 && folderList.length === 0) {
+                return callback();
+            }
+
+            if (files.length === 0) {
+                walkFolder(folderList.shift(), callback);
+            }
+            asyncDispatcher.dispatchEmpty(files.length);
+
+            files.forEach(file => {
+                let filePath = path.join(folderPath, file);
+                isDir(filePath, (err, status) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    if (status) {
+                        folderList.push(filePath);
+                    } else {
+                        fileList.push(filePath.substring(removablePathLen));
+                    }
+
+                    asyncDispatcher.markOneAsFinished();
+                });
+            });
+        });
+    }
+
+    function isDir(filePath, callback) {
+        fs.stat(filePath, (err, stats) => {
+            if (err) {
+                return callback(err);
+            }
+
+            return callback(undefined, stats.isDirectory());
+        });
+    }
+
+    function getNextFileFromFolder(callback) {
+        if (fileList.length === 0 && folderList.length === 0) {
+            return callback();
+        }
+
+        if (fileList.length > 0) {
+            const fileName = fileList.shift();
+            return callback(undefined, fileName);
+        }
+
+
+        walkFolder(folderList.shift(), (err, file) => {
+            if (err) {
+                return callback(err);
+            }
+
+            callback(undefined, file);
+        });
+    }
+}
+
+module.exports = PathAsyncIterator;
+},{"fs":false,"path":false,"swarmutils":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Archive.js":[function(require,module,exports){
+(function (Buffer){
+const Brick = require('./Brick');
+const path = require("path");
+const isStream = require("../utils/isStream");
+const AsyncDispatcher = require("../utils/AsyncDispatcher");
+const crypto = require('pskcrypto');
+const adler32 = require('adler32');
+
+function Archive(archiveConfigurator) {
+
+    const archiveFsAdapter = archiveConfigurator.getFsAdapter();
+    const storageProvider = archiveConfigurator.getStorageProvider();
+    let barMap;
+
+    this.setSeed = (seed) => {
+        archiveConfigurator.setSeed(seed);
+    };
+
+    this.getSeed = () => {
+        return archiveConfigurator.getSeed();
+    };
+
+    this.update = (fsPath, callback) => {
+        let blocksPositions = {};
+        let checksSumMap = barMap.getDictionaryObject();
+        let fileNameHashes = __setFromHashList();
+        let fileState = {};
+        loadBarMapThenExecute(__update, callback);
+
+        /**
+         * in this function, i do a directory traversal and process every file that i find, looking for blocks that already exists in our archive
+         * @private
+         */
+
+        function __setFromHashList() {
+            let folderHashList = {};
+            barMap.getFileList().forEach((file) => {
+                folderHashList[file.slice(file.indexOf('/'))] = new Set(barMap.getHashList(file));
+            });
+            return folderHashList;
+        }
+
+        function __readDirectoryRecursively(folderPath, sign, callback) {
+            archiveFsAdapter.getNextFile(folderPath, sign, __readFileChk);
+
+            function __readFileChk(err, file) {
+                if (err) {
+                    return callback(err);
+                }
+
+                if (typeof file === 'undefined') {
+                    return callback(undefined, blocksPositions, fileNameHashes);
+                }
+
+                const goodPath = path.posix.normalize(path.join(path.dirname(folderPath), file).split(path.sep).join(path.posix.sep));
+                archiveFsAdapter.getFileSize(goodPath, (err, size) => {
+                    if (err) {
+                        return callback(err);
+                    }
+                    __readBlock(goodPath, goodPath.slice(goodPath.indexOf('/')), size, 0, archiveConfigurator.getBufferSize(), undefined, undefined, barMap.isInHeader(goodPath), (err) => {
+                        if (err) {
+                            return callback(err);
+                        }
+                        __readDirectoryRecursively(folderPath, false, callback);
+                    });
+                });
+
+            }
+
+            function __readBlock(file, cutFile, fileSize, index, blockSize, currentBlockCheckSum, firstByte, alreadyInBarMap, callback) {
+                if (index >= fileSize) {
+                    if (blocksPositions[file] === undefined) {
+                        blocksPositions[file] = [];
+                    }
+                    blocksPositions[file].push({start: fileSize, end: fileSize});
+                    return callback();
+                }
+                archiveFsAdapter.readBlockFromFile(file, index, index + blockSize - 1, (err, data) => {
+                    if (err) {
+                        return callback(err);
+                    }
+                    if (currentBlockCheckSum === undefined) {
+                        currentBlockCheckSum = adler32.sum(data);
+                    } else {
+                        currentBlockCheckSum = adler32.roll(currentBlockCheckSum, blockSize, firstByte, data[blockSize - 1]);
+                    }
+                    let matchFound = false;
+                    if (checksSumMap[currentBlockCheckSum] !== undefined) {
+                        let hardDigest = crypto.pskHash(data).toString('hex');
+                        for (let k = 0; k < checksSumMap[currentBlockCheckSum].length; k++) {
+                            if (checksSumMap[currentBlockCheckSum][k] === hardDigest) {
+                                if (blocksPositions[file] === undefined) {
+                                    blocksPositions[file] = [];
+                                }
+                                blocksPositions[file].push({start: index, end: index + blockSize});
+                                // if(alreadyInBarMap === false){
+                                //     let tempBrick = new Brick();
+                                //     tempBrick.setTransformedData(data);
+                                // }
+                                fileState[file] = alreadyInBarMap;
+                                if (typeof fileNameHashes[cutFile] !== 'undefined') {
+                                    fileNameHashes[cutFile].delete(hardDigest);
+                                }
+                                matchFound = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (matchFound === false) {
+                        __readBlock(file, cutFile, fileSize, index + 1, blockSize, currentBlockCheckSum, data[0], alreadyInBarMap, callback);
+                    } else {
+                        __readBlock(file, cutFile, fileSize, index + blockSize, blockSize, undefined, undefined, alreadyInBarMap, callback);
+                    }
+                });
+            }
+
+        }
+
+        function iterateThroughOffsets(fileName, goodPath, precedence, iteratorIndex, filePositions, callback) {
+            if (iteratorIndex >= filePositions.length) {
+                return callback();
+            }
+            let positionObj = filePositions[iteratorIndex];
+            if (positionObj === undefined) {
+                return callback();
+            }
+            if (positionObj.start > precedence) {
+                archiveFsAdapter.readBlockFromFile(goodPath, precedence, positionObj.end - 1, (err, blockData) => {
+                    if (err) {
+                        return callback(err);
+                    }
+                    let bufferSize = archiveConfigurator.getBufferSize();
+                    for (let index = 0; index < blockData.length; index += bufferSize) {
+                        let brick = new Brick();
+                        brick.setTransformedData(blockData.slice(index, index + bufferSize));
+                        barMap.add(fileName, brick);
+                        storageProvider.putBrick(brick, (err) => {
+                            if (err) {
+                                return callback(err);
+                            }
+                            if (index + bufferSize >= blockData.length) {
+                                iterateThroughOffsets(fileName, goodPath, positionObj.end, iteratorIndex + 1, filePositions, callback);
+                            }
+                        });
+                    }
+                });
+            } else {
+                if (fileState[goodPath] === false) {
+                    archiveFsAdapter.readBlockFromFile(goodPath, positionObj.start, positionObj.end - 1, (err, blockData) => {
+                        if (err) {
+                            return callback(err);
+                        }
+                        let brick = new Brick();
+                        brick.setTransformedData(blockData);
+                        barMap.add(fileName, brick);
+                        iterateThroughOffsets(fileName, goodPath, positionObj.end, iteratorIndex + 1, filePositions, callback);
+                    });
+                } else {
+                    iterateThroughOffsets(fileName, goodPath, positionObj.end, iteratorIndex + 1, filePositions, callback);
+                }
+            }
+        }
+
+        function __addBricks(positions, callback) {
+            let precedence;
+            const asyncDispatcher = new AsyncDispatcher((errs, results) => {
+                return callback();
+            });
+            asyncDispatcher.dispatchEmpty(Object.keys(positions).length);
+            Object.keys(positions).forEach((fileName) => {
+                precedence = 0;
+                let goodPath = path.posix.normalize(fileName.split(path.sep).join(path.posix.sep));
+
+                iterateThroughOffsets(fileName, goodPath, precedence, 0, positions[fileName], (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+                    asyncDispatcher.markOneAsFinished(undefined, fileName);
+                });
+            });
+        }
+
+        function __deleteBricks(deletions) {
+            //de adaugat, barMap.removeBrick(filePath,brickHash);
+            Object.keys(deletions).forEach((fileName) => {
+                deletions[fileName].forEach((brickHash) => {
+                    barMap.removeBrick(fileName, brickHash);
+                });
+            });
+        }
+
+        function __update() {
+            __readDirectoryRecursively(fsPath, true, (err, positions, deletions) => {
+                if (err) {
+                    return callback(err);
+                }
+                __addBricks(positions, (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+                    __deleteBricks(deletions);
+                    storageProvider.putBarMap(barMap, callback);
+                });
+            });
+        }
+    };
+
+    this.writeFile = (filePath, data, callback) => {
+        loadBarMapThenExecute(__addData, callback);
+
+        function __addData() {
+            const brick = new Brick(archiveConfigurator);
+            if (typeof data === "string") {
+                data = Buffer.from(data);
+            }
+
+            if (!Buffer.isBuffer(data)) {
+                return callback(Error(`Type of data is ${typeof data}. Expected Buffer.`));
+            }
+
+            brick.setRawData(data);
+            barMap.add(filePath, brick);
+            storageProvider.putBrick(brick, (err) => {
+                if (err) {
+                    return callback(err);
+                }
+
+                storageProvider.putBarMap(barMap, (err, digest) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    callback(undefined, digest);
+                });
+            });
+        }
+    };
+
+    this.readFile = (barPath, callback) => {
+        loadBarMapThenExecute(__readFile, callback);
+
+        function __readFile() {
+            let fileData = Buffer.alloc(0);
+            let brickIds;
+            try {
+                brickIds = barMap.getHashList(barPath);
+            } catch (err) {
+                return callback(err);
+            }
+
+            getFileRecursively(0, callback);
+
+            function getFileRecursively(brickIndex, callback) {
+                const brickId = brickIds[brickIndex];
+                storageProvider.getBrick(brickId, (err, brick) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    brick.setConfig(archiveConfigurator);
+                    brick.setTransformParameters(barMap.getTransformParameters(brickId));
+                    fileData = Buffer.concat([fileData, brick.getRawData()]);
+                    ++brickIndex;
+
+                    if (brickIndex < brickIds.length) {
+                        getFileRecursively(brickIndex, callback);
+                    } else {
+                        callback(undefined, fileData);
+                    }
+                });
+            }
+        }
+    };
+
+    this.addFile = (fsFilePath, barPath, callback) => {
+        if (typeof barPath === "function") {
+            callback = barPath;
+            barPath = fsFilePath;
+        }
+        loadBarMapThenExecute(__addFile, callback);
+
+        function __addFile() {
+            readFileAsBlocks(fsFilePath, barPath, archiveConfigurator.getBufferSize(), (err) => {
+                if (err) {
+                    return callback(err);
+                }
+
+                barMap.setConfig(archiveConfigurator);
+                if (archiveConfigurator.getMapEncryptionKey()) {
+                    barMap.setEncryptionKey(archiveConfigurator.getMapEncryptionKey());
+                }
+
+                storageProvider.putBarMap(barMap, callback);
+            });
+        }
+    };
+
+    this.extractFile = (fsFilePath, barPath, callback) => {
+        if (typeof barPath === "function") {
+            callback = barPath;
+            barPath = fsFilePath;
+        }
+
+        loadBarMapThenExecute(__extractFile, callback);
+
+        function __extractFile() {
+            const brickIds = barMap.getHashList(barPath);
+            getFileRecursively(0, callback);
+
+            function getFileRecursively(brickIndex, callback) {
+                const brickId = brickIds[brickIndex];
+                storageProvider.getBrick(brickId, (err, brick) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    brick.setConfig(archiveConfigurator);
+                    brick.setTransformParameters(barMap.getTransformParameters(brickId));
+                    archiveFsAdapter.appendBlockToFile(fsFilePath, brick.getRawData(), (err) => {
+                        if (err) {
+                            return callback(err);
+                        }
+
+                        ++brickIndex;
+                        if (brickIndex < brickIds.length) {
+                            getFileRecursively(brickIndex, callback);
+                        } else {
+                            callback();
+                        }
+                    });
+                });
+            }
+        }
+    };
+
+    this.appendToFile = (filePath, data, callback) => {
+
+        loadBarMapThenExecute(__appendToFile, callback);
+
+        function __appendToFile() {
+            filePath = path.normalize(filePath);
+
+            if (typeof data === "string") {
+                data = Buffer.from(data);
+            }
+            if (Buffer.isBuffer(data)) {
+                const dataBrick = new Brick(data);
+                storageProvider.putBrick(dataBrick, (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    barMap.add(filePath, dataBrick);
+                    putBarMap(callback);
+                });
+                return;
+            }
+
+            if (isStream.isReadable(data)) {
+                data.on('error', (err) => {
+                    return callback(err);
+                }).on('data', (chunk) => {
+                    const dataBrick = new Brick(chunk);
+                    barMap.add(filePath, dataBrick);
+                    storageProvider.putBrick(dataBrick, (err) => {
+                        if (err) {
+                            return callback(err);
+                        }
+                    });
+                }).on("end", () => {
+                    putBarMap(callback);
+                });
+                return;
+            }
+            callback(new Error("Invalid type of parameter data"));
+        }
+    };
+
+
+    this.replaceFile = (fileName, stream, callback) => {
+        if (typeof stream !== 'object') {
+            return callback(new Error('Wrong stream!'));
+        }
+
+        loadBarMapThenExecute(__replaceFile, callback);
+
+        function __replaceFile() {
+            fileName = path.normalize(fileName);
+            stream.on('error', () => {
+                return callback(new Error("File does not exist!"));
+            }).on('open', () => {
+                storageProvider.deleteFile(fileName, (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    barMap.emptyList(fileName);
+                });
+            }).on('data', (chunk) => {
+                let tempBrick = new Brick(chunk);
+                barMap.add(fileName, tempBrick);
+                storageProvider.putBrick(tempBrick, (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+                    putBarMap(callback);
+                });
+            });
+        }
+    };
+
+    this.deleteFile = (filePath, callback) => {
+        loadBarMapThenExecute(() => {
+            storageProvider.deleteFile(filePath, callback);
+        }, callback);
+    };
+
+    this.addFolder = (fsFolderPath, barPath, callback) => {
+        if (typeof barPath === "function") {
+            callback = barPath;
+            barPath = fsFolderPath;
+        }
+
+        loadBarMapThenExecute(__addFolder, callback);
+
+        function __addFolder() {
+
+            archiveFsAdapter.getNextFile(fsFolderPath, readFileCb);
+
+            function readFileCb(err, file) {
+                if (err) {
+                    return callback(err);
+                }
+
+                if (typeof file !== "undefined") {
+
+                    readFileAsBlocks(path.join(path.dirname(fsFolderPath), file), path.join(path.dirname(barPath), file), archiveConfigurator.getBufferSize(), (err) => {
+                        if (err) {
+                            return callback(err);
+                        }
+
+                        archiveFsAdapter.getNextFile(fsFolderPath, readFileCb);
+                    });
+                } else {
+                    storageProvider.putBarMap(barMap, (err, mapDigest) => {
+                        if (err) {
+                            return callback(err);
+                        }
+
+                        archiveConfigurator.setMapDigest(mapDigest);
+                        callback(undefined, mapDigest);
+                    });
+                }
+            }
+        }
+    };
+    this.extractFolder = (fsFolderPath, barPath, callback) => {
+        if (typeof fsFolderPath === "function") {
+            callback = fsFolderPath;
+            fsFolderPath = undefined;
+        }
+        if (typeof barPath === "function") {
+            callback = barPath;
+            barPath = undefined;
+        }
+
+        loadBarMapThenExecute(() => {
+            const filePaths = barMap.getFileList(barPath);
+            const asyncDispatcher = new AsyncDispatcher(() => {
+                callback();
+            });
+            asyncDispatcher.dispatchEmpty(filePaths.length);
+            filePaths.forEach(filePath => {
+                let actualPath;
+                if (fsFolderPath) {
+                    if (fsFolderPath.includes(filePath)) {
+                        actualPath = fsFolderPath;
+                    }else{
+                        actualPath = path.join(fsFolderPath, filePath);
+                    }
+
+                }else{
+                    actualPath = filePath;
+                }
+
+                this.extractFile(actualPath, (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    asyncDispatcher.markOneAsFinished();
+                });
+            });
+        }, callback);
+    };
+
+    this.store = (callback) => {
+        storageProvider.putBarMap(barMap, callback);
+    };
+
+    this.list = (callback) => {
+        loadBarMapThenExecute(() => {
+            callback(undefined, barMap.getFileList());
+        }, callback);
+    };
+
+    this.clone = (targetStorage, preserveKeys = true, callback) => {
+        targetStorage.getBarMap((err, targetBarMap) => {
+            if (err) {
+                return callback(err);
+            }
+
+            targetBarMap.setConfig(archiveConfigurator);
+            targetBarMap.setEncryptionKey(archiveConfigurator.getMapEncryptionKey());
+            loadBarMapThenExecute(__cloneBricks, callback);
+
+            function __cloneBricks() {
+                const fileList = barMap.getFileList();
+                __getFilesRecursively(fileList, 0, (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    targetStorage.putBarMap(targetBarMap, callback);
+                });
+            }
+
+            function __getFilesRecursively(fileList, fileIndex, callback) {
+                const filePath = fileList[fileIndex];
+                __getBricksRecursively(filePath, barMap.getHashList(filePath), 0, (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+                    ++fileIndex;
+                    if (fileIndex === fileList.length) {
+                        return callback();
+                    }
+
+                    __getFilesRecursively(fileList, fileIndex, callback);
+                });
+            }
+
+            function __getBricksRecursively(filePath, brickList, brickIndex, callback) {
+                storageProvider.getBrick(brickList[brickIndex], (err, brick) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    if (barMap.getTransformParameters(brickList[brickIndex]).key) {
+                        brick.setTransformParameters({key: barMap.getTransformParameters(brickList[brickIndex]).key});
+                    }
+                    __addBrickToTarget(brick, callback);
+                });
+
+                function __addBrickToTarget(brick, callback) {
+                    brick.setConfig(archiveConfigurator);
+                    if (!preserveKeys) {
+                        brick.createNewTransform();
+                    }
+
+                    ++brickIndex;
+                    targetBarMap.add(filePath, brick);
+                    targetStorage.putBrick(brick, (err) => {
+                        if (err) {
+                            return callback(err);
+                        }
+
+                        if (brickIndex === brickList.length) {
+                            return callback();
+                        }
+
+                        __getBricksRecursively(filePath, brickList, brickIndex, callback);
+                    });
+                }
             }
         });
     };
 
-    this.onReturn = function(callback){
-        this.on({
-            __return__: callback
+    //------------------------------------------- internal methods -----------------------------------------------------
+
+    function putBarMap(callback) {
+        if (typeof archiveConfigurator.getMapDigest() !== "undefined") {
+            storageProvider.deleteFile(archiveConfigurator.getMapDigest(), (err) => {
+                if (err) {
+                    return callback(err);
+                }
+
+                __putBarMap(callback);
+            });
+            return;
+        }
+        __putBarMap(callback);
+    }
+
+    function __putBarMap(callback) {
+        storageProvider.putBarMap(barMap, (err, newMapDigest) => {
+            if (err) {
+                return callback(err);
+            }
+
+            archiveConfigurator.setMapDigest(newMapDigest);
+            callback(undefined, archiveConfigurator.getMapDigest());
         });
+    }
+
+    function readFileAsBlocks(fsFilePath, barPath, blockSize, callback) {
+
+        archiveFsAdapter.getFileSize(fsFilePath, (err, fileSize) => {
+            if (err) {
+                return callback(err);
+            }
+
+            let noBlocks = Math.floor(fileSize / blockSize);
+            if (fileSize % blockSize > 0) {
+                ++noBlocks;
+            }
+
+            __readBlocksRecursively(0, callback);
+
+            function __readBlocksRecursively(blockIndex, callback) {
+                archiveFsAdapter.readBlockFromFile(fsFilePath, blockIndex * blockSize, (blockIndex + 1) * blockSize - 1, (err, blockData) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    const brick = new Brick(archiveConfigurator);
+
+                    brick.setRawData(blockData);
+                    barMap.add(barPath, brick);
+
+                    storageProvider.putBrick(brick, (err) => {
+                        if (err) {
+                            return callback(err);
+                        }
+
+                        ++blockIndex;
+                        if (blockIndex < noBlocks) {
+                            __readBlocksRecursively(blockIndex, callback);
+                        } else {
+                            callback();
+                        }
+                    });
+                });
+            }
+        });
+    }
+
+    function loadBarMapThenExecute(functionToBeExecuted, callback) {
+        storageProvider.getBarMap(archiveConfigurator.getMapDigest(), (err, map) => {
+            if (err) {
+                return callback(err);
+            }
+
+            if (!map.getTransformParameters() && archiveConfigurator.getMapEncryptionKey()) {
+                map.setEncryptionKey(archiveConfigurator.getMapEncryptionKey());
+            }
+
+            if (!map.getConfig()) {
+                map.setConfig(archiveConfigurator);
+            }
+
+            map.load();
+            barMap = map;
+            storageProvider.setBarMap(barMap);
+            functionToBeExecuted();
+        });
+    }
+}
+
+module.exports = Archive;
+
+}).call(this,require("buffer").Buffer)
+
+},{"../utils/AsyncDispatcher":"/opt/new_swarm_engine_release/privatesky/modules/bar/utils/AsyncDispatcher.js","../utils/isStream":"/opt/new_swarm_engine_release/privatesky/modules/bar/utils/isStream.js","./Brick":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Brick.js","adler32":false,"buffer":false,"path":false,"pskcrypto":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/ArchiveConfigurator.js":[function(require,module,exports){
+const storageProviders = {};
+const fsAdapters = {};
+const Seed = require("./Seed");
+
+function ArchiveConfigurator() {
+    const config = {};
+
+    let self = this;
+    this.setBufferSize = (bufferSize) => {
+        config.bufferSize = bufferSize;
+    };
+
+    this.getBufferSize = () => {
+        return config.bufferSize;
+    };
+
+    this.setStorageProvider = (storageProviderName, ...args) => {
+        if (!storageProviders[storageProviderName]) {
+            throw new Error(storageProviderName + " is not registered! Did you forget to register it?");
+        }
+        config.storageProvider = storageProviders[storageProviderName](...args);
+    };
+
+    this.getStorageProvider = () => {
+        return config.storageProvider;
+    };
+
+    this.setFsAdapter = (fsAdapterName, ...args) => {
+        config.fsAdapter = fsAdapters[fsAdapterName](...args);
+    };
+
+    this.getFsAdapter = () => {
+        return config.fsAdapter;
+    };
+
+    this.setMapDigest = (mapDigest) => {
+        config.mapDigest = mapDigest;
+    };
+
+    this.getMapDigest = () => {
+        return config.mapDigest;
+    };
+
+    this.setEncryptionAlgorithm = (algorithm) => {
+        if (!config.encryption) {
+            config.encryption = {};
+        }
+
+        config.encryption.algorithm = algorithm;
+    };
+
+    this.getEncryptionAlgorithm = () => {
+        if (!config.encryption) {
+            return;
+        }
+        return config.encryption.algorithm;
+    };
+
+    this.setEncryptionOptions = (options) => {
+        if (!config.encryption) {
+            config.encryption = {};
+        }
+
+        config.encryption.encOptions = options;
+    };
+
+    this.getEncryptionOptions = () => {
+        if (!config.encryption) {
+            return;
+        }
+        return config.encryption.encOptions;
+    };
+
+    this.setCompressionAlgorithm = (algorithm) => {
+        if (!config.compression) {
+            config.compression = {};
+        }
+
+        config.compression.algorithm = algorithm;
+    };
+
+    this.getCompressionAlgorithm = () => {
+        if (!config.compression) {
+            return;
+        }
+
+        return config.compression.algorithm;
+
+    };
+
+    this.setCompressionOptions = (options) => {
+        if (!config.compression) {
+            config.compression = {};
+        }
+
+        config.compression.options = options;
+    };
+
+    this.getCompressionOptions = () => {
+        if (!config.compression) {
+            return;
+        }
+        return config.compression.options;
+    };
+
+    this.setAuthTagLength = (authTagLength = 16) => {
+        const encOptions = this.getEncryptionOptions();
+        if (!encOptions) {
+            config.encryption.encOptions = {};
+        }
+
+        config.encryption.encOptions.authTagLength = authTagLength;
+    };
+
+    this.getAuthTagLength = () => {
+        if (!config.encryption || !config.encryption.encOptions) {
+            return;
+        }
+
+        return config.encryption.encOptions.authTagLength;
+    };
+
+    this.setSeedEndpoint = (endpoint) => {
+        config.seedEndpoint = endpoint;
+        this.setStorageProvider("EDFSBrickStorage", endpoint);
+    };
+
+    this.setSeedId = (id) => {
+        config.seed.setId(id);
+        this.setMapDigest(id);
+    };
+
+    this.setSeedLocation = (location) => {
+
+    };
+
+    this.setSeed = (compactSeed, seedId, seedEndpoint) => {
+        config.seed = new Seed(compactSeed, seedId, seedEndpoint);
+        const endpoint = config.seed.getEndpoint();
+        if (endpoint) {
+            this.setStorageProvider("EDFSBrickStorage", endpoint);
+        }
+        this.setMapDigest(config.seed.getId());
+    };
+
+    this.getSeed = () => {
+        loadSeed();
+        if (config.seed) {
+            return config.seed.getCompactForm();
+        }
+    };
+
+    this.getMapEncryptionKey = () => {
+        loadSeed();
+        if (!config.seed) {
+            return;
+        }
+
+        if (!config.encryption) {
+            return;
+        }
+
+        return config.seed.getEncryptionKey(config.encryption.algorithm);
+    };
+
+    //--------------------------
+    function loadSeed(){
+        if (!config.seed ) {
+            config.seed = new Seed(undefined, config.seedId, config.seedEndpoint, !!config.encryption);
+            if (config.seed.getId()) {
+                self.setMapDigest(config.seed.getId());
+            }
+        }
+    }
+}
+
+ArchiveConfigurator.prototype.registerStorageProvider = (storageProviderName, factory) => {
+    storageProviders[storageProviderName] = factory;
+};
+
+ArchiveConfigurator.prototype.registerFsAdapter = (fsAdapterName, factory) => {
+    fsAdapters[fsAdapterName] = factory;
+};
+
+module.exports = ArchiveConfigurator;
+},{"./Seed":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Seed.js"}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Brick.js":[function(require,module,exports){
+const crypto = require('pskcrypto');
+const BrickTransformFactory = require("./transforms/BrickTransformFactory");
+const transformFactory = new BrickTransformFactory();
+const adler32 = require('adler32');
+
+function Brick(config) {
+    let rawData;
+    let transformedData;
+    let hash;
+    let transformParameters;
+    let transform = transformFactory.createBrickTransform(config);
+
+    this.setConfig = (newConfig)=> {
+        config = newConfig;
+        if (transform) {
+            transform.setConfig(newConfig);
+        }else{
+            transform = transformFactory.createBrickTransform(config);
+        }
+    };
+
+    this.createNewTransform = ()=> {
+        transform = transformFactory.createBrickTransform(config);
+        transformParameters = undefined;
+        transformData();
+    };
+
+    this.getHash = ()=> {
+        if (!hash) {
+            hash = crypto.pskHash(this.getTransformedData()).toString("hex");
+        }
+
+        return hash;
+    };
+
+    this.getId = () => {
+        return config.getMapDigest();
+    };
+
+    this.setId = (id) => {
+        config.setSeedId(id);
+    };
+
+    this.getSeed = () => {
+        return config.getSeed().toString();
+    };
+    this.getAdler32 = ()=> {
+        return adler32.sum(this.getTransformedData());
+    };
+
+    this.setRawData = function (data) {
+        rawData = data;
+        if (!transform) {
+            transformedData = rawData;
+        }
+    };
+
+    this.getRawData = ()=> {
+        if (rawData) {
+            return rawData;
+        }
+
+        if (transformedData) {
+            if (!transform) {
+                return transformedData;
+            }
+
+            rawData = transform.applyInverseTransform(transformedData, transformParameters);
+            if (rawData) {
+                return rawData;
+            }
+
+            return transformedData;
+        }
+
+        throw new Error("The brick does not contain any data.");
+    };
+
+    this.setTransformedData = (data)=> {
+        transformedData = data;
+    };
+
+    this.getTransformedData = ()=> {
+        if (!transformedData) {
+            transformData();
+        }
+
+        if (transformedData) {
+            return transformedData;
+        }
+
+        if (rawData) {
+            return rawData;
+        }
+
+        throw new Error("The brick does not contain any data.");
+    };
+
+    this.getTransformParameters = ()=> {
+        if (!transformedData) {
+            transformData();
+        }
+        return transformParameters;
+    };
+
+    this.setTransformParameters =  (newTransformParams) =>{
+        if (!newTransformParams) {
+            return;
+        }
+
+        if (!transformParameters) {
+            transformParameters = newTransformParams;
+            return;
+        }
+
+        Object.keys(newTransformParams).forEach(key => {
+            transformParameters[key] = newTransformParams[key];
+        });
+    };
+
+    this.getRawSize = ()=> {
+        return rawData.length;
+    };
+
+    this.getTransformedSize = ()=> {
+        if (!transformedData) {
+            return rawData.length;
+        }
+
+        return transformedData.length;
+    };
+
+//----------------------------------------------- internal methods -----------------------------------------------------
+    function transformData() {
+        if (!transform) {
+            throw new Error("transform undefined");
+        }
+
+        if (rawData) {
+            transformedData = transform.applyDirectTransform(rawData, transformParameters);
+            if (!transformedData) {
+                transformedData = rawData;
+            }
+        }
+
+        transformParameters = transform.getTransformParameters();
+    }
+
+}
+
+module.exports = Brick;
+
+},{"./transforms/BrickTransformFactory":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/BrickTransformFactory.js","adler32":false,"pskcrypto":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/FileBarMap.js":[function(require,module,exports){
+(function (Buffer){
+const Brick = require("./Brick");
+const util = require("../utils/utilities");
+const path = require('path');
+
+function FileBarMap(header) {
+    header = header || {};
+
+    let brickOffset = util.getBarMapOffsetSize();
+    let archiveConfig;
+    let encryptionKey;
+
+    this.add = (filePath, brick) => {
+        filePath = filePath.split(path.sep).join(path.posix.sep);
+        this.load();
+        if (typeof header[filePath] === "undefined") {
+            header[filePath] = [];
+        }
+
+        const brickObj = {
+            checkSum: brick.getAdler32(),
+            offset: brickOffset,
+            hash: brick.getHash()
+        };
+
+        const encKey = brick.getTransformParameters() ? brick.getTransformParameters().key : undefined;
+        if (encKey) {
+            brickObj.key = encKey;
+        }
+
+        header[filePath].push(brickObj);
+        brickOffset += brick.getTransformedSize();
+    };
+
+    this.getHashList = (filePath) => {
+        this.load();
+        return header[filePath].map(brickObj => brickObj.offset);
+    };
+
+    this.getFileList = (folderBarPath) => {
+        this.load();
+        if (!folderBarPath) {
+            return Object.keys(header);
+        }
+        return Object.keys(header).filter(fileName => fileName.includes(folderBarPath));
+    };
+
+    this.getDictionaryObject = () => {
+        let objectDict = {};
+        Object.keys(header).forEach((fileName) => {
+            let brickObjects = header[fileName];
+            for (let j = 0; j < brickObjects.length; j++) {
+                if (typeof objectDict[brickObjects[j]['checkSum']] === 'undefined') {
+                    objectDict[brickObjects[j]['checkSum']] = [];
+                }
+                objectDict[brickObjects[j]['checkSum']].push(brickObjects[j]['hash']);
+            }
+        });
+        return objectDict;
+    };
+
+    this.getTransformParameters = (brickId) => {
+        if (!brickId) {
+            return encryptionKey ? {key: encryptionKey} : {};
+        }
+
+        this.load();
+        let bricks = [];
+        const files = this.getFileList();
+
+        files.forEach(filePath => {
+            bricks = bricks.concat(header[filePath]);
+        });
+
+        const brickObj = bricks.find(brick => {
+            return brick.offset === brickId;
+        });
+
+        const addTransformData = {};
+        if (brickObj.key) {
+            addTransformData.key = Buffer.from(brickObj.key);
+        }
+
+        return addTransformData;
+    };
+
+    this.toBrick = () => {
+        this.load();
+        const brick = new Brick(archiveConfig);
+        brick.setTransformParameters({key: encryptionKey});
+        brick.setRawData(Buffer.from(JSON.stringify(header)));
+        return brick;
+    };
+
+    this.load = () => {
+        if (header instanceof Brick) {
+            header.setConfig(archiveConfig);
+            if (encryptionKey) {
+                header.setTransformParameters({key: encryptionKey});
+            }
+            header = JSON.parse(header.getRawData().toString());
+        }
+    };
+
+    this.setConfig = (config) => {
+        archiveConfig = config;
+    };
+
+    this.getConfig = () => {
+        return archiveConfig;
+    };
+
+    this.setEncryptionKey = (encKey) => {
+        encryptionKey = encKey;
+    };
+
+    this.removeFile = (filePath) => {
+        this.load();
+        delete header[filePath];
     };
 }
 
-var abstractInteractionSpace = {
-    startSwarm: function (swarmName, ctor, args) {
-        throw new Error("Overwrite  SwarmInteraction.prototype.startSwarm");
-    },
-    resendSwarm: function (swarmInstance, swarmSerialisation, ctor, args) {
-        throw new Error("Overwrite  SwarmInteraction.prototype.continueSwarm ");
-    },
-    on: function (swarmInstance, phaseName, callback) {
-        throw new Error("Overwrite  SwarmInteraction.prototype.onSwarm");
-    },
-off: function (swarmInstance) {
-        throw new Error("Overwrite  SwarmInteraction.prototype.onSwarm");
-    }
-};
+module.exports = FileBarMap;
+}).call(this,require("buffer").Buffer)
 
-module.exports.newInteractionSpace = function (communicationInterface) {
+},{"../utils/utilities":"/opt/new_swarm_engine_release/privatesky/modules/bar/utils/utilities.js","./Brick":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Brick.js","buffer":false,"path":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/FileBrickStorage.js":[function(require,module,exports){
+(function (Buffer){
+const BarMap = require("./FileBarMap");
+const util = require("../utils/utilities");
+const fs = require("fs");
+const Brick = require("./Brick");
+const AsyncDispatcher = require("../utils/AsyncDispatcher");
 
-    if(!communicationInterface) {
-        communicationInterface = abstractInteractionSpace ;
-    }
-    return {
-        startSwarm: function (swarmName, ctor, ...args) {
-            return new SwarmInteraction(communicationInterface, swarmName, ctor, args);
+function FileBrickStorage(filePath) {
+
+    let isFirstBrick = true;
+    let map;
+    let mapOffset;
+
+    this.setBarMap = (barMap) => {
+        map = barMap;
+    };
+
+    this.putBrick = (brick, callback) => {
+        if (isFirstBrick) {
+            isFirstBrick = false;
+            const writeStream = fs.createWriteStream(filePath, {start: util.getBarMapOffsetSize()});
+            writeStream.on("error", (err) => {
+                return callback(err);
+            });
+
+            writeStream.write(brick.getTransformedData(), callback);
+        } else {
+            fs.appendFile(filePath, brick.getTransformedData(), callback);
         }
     };
+
+    this.getBrick = (brickId, callback) => {
+        this.getBarMap((err, barMap) => {
+            if (err) {
+                return callback(err);
+            }
+            let brickOffsets = [];
+            const fileList = barMap.getFileList();
+            fileList.forEach(file => {
+                brickOffsets = brickOffsets.concat(barMap.getHashList(file));
+            });
+
+            const brickIndex = brickOffsets.findIndex(el => {
+                return el === brickId;
+            });
+
+            let nextBrickId = brickOffsets[brickIndex + 1];
+            if (!nextBrickId) {
+                nextBrickId = Number(mapOffset);
+            }
+
+            readBrick(brickId, nextBrickId, callback);
+        });
+
+    };
+
+    this.deleteFile = (fileName, callback) => {
+        this.getBarMap((err, barMap) => {
+            if (err) {
+                return callback(err);
+            }
+
+            barMap.removeFile(fileName);
+            this.putBarMap(barMap, callback);
+        });
+    };
+
+
+    this.putBarMap = (barMap, callback) => {
+        map = barMap;
+        readBarMapOffset((err, offset) => {
+            if(offset) {
+                offset = Number(offset);
+                fs.truncate(filePath, offset, (err) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    __writeBarMap(offset);
+                });
+            }else{
+                fs.stat(filePath, (err, stats) => {
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    const barMapOffset = stats.size;
+
+                    const bufferBarMapOffset = Buffer.alloc(util.getBarMapOffsetSize());
+                    bufferBarMapOffset.writeBigUInt64LE(BigInt(barMapOffset));
+                    mapOffset = barMapOffset;
+                    const offsetWriteStream = fs.createWriteStream(filePath, {flags: "r+", start: 0});
+
+                    offsetWriteStream.on("error", (err) => {
+                        return callback(err);
+                    });
+
+                    offsetWriteStream.write(bufferBarMapOffset, (err) => {
+                        if (err) {
+                            return callback(err);
+                        }
+
+                        __writeBarMap(barMapOffset);
+                    });
+                });
+            }
+        });
+
+        function __writeBarMap(offset) {
+            const mapWriteStream = fs.createWriteStream(filePath, {flags: "r+", start: offset});
+            mapWriteStream.on("error", (err) => {
+                return callback(err);
+            });
+
+            const mapBrick = barMap.toBrick();
+            mapBrick.setTransformParameters(barMap.getTransformParameters());
+            mapWriteStream.write(mapBrick.getTransformedData(), callback);
+        }
+
+    };
+
+    this.getBarMap = (mapDigest, callback) => {
+        if (typeof mapDigest === "function") {
+            callback = mapDigest;
+        }
+
+        if (map) {
+            return callback(undefined, map);
+        }
+
+        readBarMap((err, barMap) => {
+            if (err) {
+                return callback(err);
+            }
+
+            map = barMap;
+            callback(undefined, barMap);
+        });
+    };
+
+    //------------------------------------------ Internal functions ---------------------------------------------------
+
+    function readBarMapOffset(callback) {
+        const readStream = fs.createReadStream(filePath, {start: 0, end: util.getBarMapOffsetSize() - 1});
+
+        const buffer = Buffer.alloc(util.getBarMapOffsetSize());
+        let offsetBuffer = 0;
+
+        readStream.on("data", (chunk) => {
+            chunk.copy(buffer, offsetBuffer);
+            offsetBuffer += chunk.length;
+        });
+
+        readStream.on("end", () => {
+            callback(undefined, buffer.readBigUInt64LE());
+        });
+
+        readStream.on("error", (err) => {
+            return callback(err);
+        });
+    }
+
+    function readBarMap(callback) {
+        readBarMapOffset((err, barMapOffset) => {
+            if (err) {
+                if (err.code === "ENOENT") {
+                    return callback(undefined, new BarMap());
+                }
+
+                return callback(err)
+            }
+
+            mapOffset = barMapOffset;
+            const readStream = fs.createReadStream(filePath, {start: Number(barMapOffset)});
+            let barMapData = Buffer.alloc(0);
+
+            readStream.on("data", (chunk) => {
+                barMapData = Buffer.concat([barMapData, chunk]);
+            });
+
+            readStream.on("error", (err) => {
+                return callback(err);
+            });
+
+            readStream.on("end", () => {
+                const mapBrick = new Brick();
+                mapBrick.setTransformedData(barMapData);
+                callback(undefined, new BarMap(mapBrick));
+            });
+        });
+    }
+
+    function readBrick(brickOffsetStart, brickOffsetEnd, callback) {
+        const readStream = fs.createReadStream(filePath, {start: brickOffsetStart, end: brickOffsetEnd - 1});
+        let brickData = Buffer.alloc(0);
+
+        readStream.on("data", (chunk) => {
+            brickData = Buffer.concat([brickData, chunk]);
+        });
+
+        readStream.on("error", (err) => {
+            return callback(err);
+        });
+
+        readStream.on("end", () => {
+            const brick = new Brick();
+            brick.setTransformedData(brickData);
+            callback(undefined, brick);
+        });
+    }
+}
+
+module.exports = {
+    createFileBrickStorage(filePath) {
+        return new FileBrickStorage(filePath);
+    }
+};
+}).call(this,require("buffer").Buffer)
+
+},{"../utils/AsyncDispatcher":"/opt/new_swarm_engine_release/privatesky/modules/bar/utils/AsyncDispatcher.js","../utils/utilities":"/opt/new_swarm_engine_release/privatesky/modules/bar/utils/utilities.js","./Brick":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Brick.js","./FileBarMap":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/FileBarMap.js","buffer":false,"fs":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/FolderBarMap.js":[function(require,module,exports){
+(function (Buffer){
+const Brick = require("./Brick");
+const path = require('path');
+
+function FolderBarMap(header) {
+    header = header || {};
+
+    let archiveConfig;
+    let encryptionKey;
+
+    this.add = (filePath, brick) => {
+        filePath = filePath.split(path.sep).join(path.posix.sep);
+        this.load();
+        if (typeof header[filePath] === "undefined") {
+            header[filePath] = [];
+        }
+
+        const brickObj = {
+            checkSum: brick.getAdler32(),
+            hash: brick.getHash()
+        };
+
+        const encKey = brick.getTransformParameters() ? brick.getTransformParameters().key : undefined;
+        if (encKey) {
+            brickObj.key = encKey;
+        }
+        header[filePath].push(brickObj);
+    };
+
+    this.isInHeader = (filePath) => {
+        return header[filePath] !== undefined;
+    };
+
+    this.removeBrick = (filePath, brickHash) => {
+        let indexToRemove = header[filePath].findIndex(brickObj => brickObj.hash === brickHash);
+        header[filePath].splice(indexToRemove, 1);
+    };
+
+    this.getDictionaryObject = () => {
+        let objectDict = {};
+        Object.keys(header).forEach((fileName) => {
+            let brickObjects = header[fileName];
+            for (let j = 0; j < brickObjects.length; j++) {
+                if (typeof objectDict[brickObjects[j]['checkSum']] === 'undefined') {
+                    objectDict[brickObjects[j]['checkSum']] = [];
+                }
+                objectDict[brickObjects[j]['checkSum']].push(brickObjects[j]['hash']);
+            }
+        });
+        return objectDict;
+    };
+
+    this.getHashList = (filePath) => {
+        this.load();
+        return header[filePath].map(brickObj => brickObj.hash);
+    };
+
+    this.getCheckSumList = (filePath) => {
+        this.load();
+        return header[filePath].map(brickObj => brickObj.checkSum);
+    };
+
+    this.emptyList = (filePath) => {
+        header[filePath] = [];
+    };
+
+
+    this.toBrick = () => {
+        this.load();
+        const brick = new Brick(archiveConfig);
+        if (encryptionKey) {
+            brick.setTransformParameters({key: encryptionKey});
+        }
+        brick.setRawData(Buffer.from(JSON.stringify(header)));
+        return brick;
+    };
+
+
+    this.getFileList = (folderBarPath) => {
+        this.load();
+        if (!folderBarPath) {
+            return Object.keys(header);
+        }
+        return Object.keys(header).filter(fileName => fileName.includes(folderBarPath));
+    };
+
+    this.getTransformParameters = (brickId) => {
+        this.load();
+        if (!brickId) {
+            return encryptionKey ? {key: encryptionKey} : undefined;
+        }
+        let bricks = [];
+        const files = this.getFileList();
+        files.forEach(file => {
+            bricks = bricks.concat(header[file]);
+        });
+
+        const brickObj = bricks.find(brick => {
+            return brick.hash === brickId;
+        });
+
+        const addTransformData = {};
+        if (brickObj.key) {
+            addTransformData.key = Buffer.from(brickObj.key);
+        }
+
+        return addTransformData;
+    };
+
+    this.load = () => {
+        if (header instanceof Brick) {
+            header.setConfig(archiveConfig);
+            header.setTransformParameters({key: encryptionKey});
+            header = JSON.parse(header.getRawData().toString());
+        }
+    };
+
+    this.setConfig = (config) => {
+        archiveConfig = config;
+    };
+
+    this.getConfig = () => {
+        return archiveConfig;
+    };
+
+    this.setEncryptionKey = (encKey) => {
+        encryptionKey = encKey;
+    };
+
+    this.removeFile = (filePath) => {
+        this.load();
+        delete header[filePath];
+    };
+}
+
+module.exports = FolderBarMap;
+}).call(this,require("buffer").Buffer)
+
+},{"./Brick":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Brick.js","buffer":false,"path":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/FolderBrickStorage.js":[function(require,module,exports){
+const fs = require("fs");
+const path = require("path");
+const BarMap = require("./FolderBarMap");
+const Brick = require("./Brick");
+
+function FolderBrickStorage(location) {
+    let map;
+
+    this.setBarMap = (barMap) => {
+        map = barMap;
+    };
+
+    this.putBrick = (brick, callback) => {
+        const writeStream = fs.createWriteStream(path.join(location, brick.getHash()));
+        writeStream.write(brick.getTransformedData(), (...args) => {
+            writeStream.end();
+            callback(...args);
+        });
+    };
+
+    this.getBrick = (brickHash, callback) => {
+        fs.readFile(path.join(location, brickHash), (err, brickData) => {
+            if (err) {
+                return callback(err);
+            }
+
+            const brick = new Brick();
+            brick.setTransformedData(brickData);
+            callback(err, brick);
+        });
+    };
+
+    this.deleteFile = (filePath, callback) => {
+        this.getBarMap((err, barMap) => {
+            if (err) {
+                return callback(err);
+            }
+
+            fs.unlink(path.join(location, barMap.toBrick().getHash()), (err) => {
+                if (err) {
+                    return callback(err);
+                }
+
+                barMap.removeFile(filePath);
+                this.putBarMap(barMap, callback);
+            });
+        });
+    };
+
+    this.putBarMap = (barMap, callback) => {
+        map = barMap;
+        const barMapBrick = barMap.toBrick();
+        barMapBrick.setTransformParameters(barMap.getTransformParameters());
+       
+        let brickId = barMapBrick.getId();
+        if (!brickId) {
+            brickId = barMapBrick.getHash();
+        }
+
+        barMapBrick.setId(brickId);
+        const writeStream = fs.createWriteStream(path.join(location, brickId));
+        writeStream.write(barMapBrick.getTransformedData(), (err) => {
+            writeStream.end();
+            callback(err, barMapBrick.getSeed());
+        });
+    };
+
+    this.getBarMap = (mapDigest, callback) => {
+        if (typeof mapDigest === "function") {
+            callback = mapDigest;
+            mapDigest = undefined;
+        }
+
+        if (map) {
+            return callback(undefined, map);
+        }
+
+        if (typeof mapDigest === "undefined") {
+            return callback(undefined, new BarMap());
+        }
+
+        this.getBrick(mapDigest, (err, mapBrick) => {
+            if (err) {
+                return callback(err);
+            }
+
+            const barMap = new BarMap(mapBrick);
+            map = barMap;
+            callback(undefined, barMap);
+        });
+    }
+}
+
+module.exports = {
+    createFolderBrickStorage(location) {
+        return new FolderBrickStorage(location);
+    }
+};
+},{"./Brick":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Brick.js","./FolderBarMap":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/FolderBarMap.js","fs":false,"path":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Seed.js":[function(require,module,exports){
+(function (Buffer){
+const crypto = require("pskcrypto");
+
+function Seed(compactSeed, id, endpoint, usedForEncryption  = true, randomLength = 32) {
+    let seed;
+
+    init();
+
+    this.getCompactForm = () => {
+        if (!seed) {
+            throw Error("Cannot return seed");
+        }
+
+        return generateCompactForm(seed);
+    };
+
+    this.getLocation = () => {
+        if (!seed) {
+            throw Error("Cannot retrieve location");
+        }
+
+        return seed.endpoint + "/" + seed.id.toString("hex");
+    };
+
+    this.getEndpoint = () => {
+        if (!seed) {
+            throw Error("Cannot retrieve endpoint");
+        }
+
+        return seed.endpoint.toString();
+    };
+
+    this.getId = () => {
+        if (!seed.id) {
+            return;
+        }
+        return seed.id.toString("hex");
+    };
+
+    this.setId = (localId) => {
+        seed.id = localId;
+    };
+
+    this.getEncryptionKey = (algorithm) => {
+        if (seed.tag === 'r') {
+            return;
+        }
+
+        return crypto.deriveKey(algorithm, generateCompactForm(seed));
+    };
+
+    //--------------------------------------- internal methods --------------------------------------------
+    function init() {
+        if (!compactSeed) {
+            seed = create();
+        } else {
+            load(compactSeed);
+        }
+    }
+
+    function create() {
+        const localSeed = {};
+        localSeed.id = id;
+        if (!id && usedForEncryption) {
+            localSeed.id = crypto.randomBytes(randomLength);
+        }
+
+        if (endpoint) {
+            localSeed.endpoint = endpoint;
+        }
+
+        if (usedForEncryption === true) {
+            localSeed.flag = 'e';
+        }else{
+            localSeed.flag = 'r';
+        }
+
+        return localSeed;
+    }
+
+    function generateCompactForm(expandedSeed) {
+        if (typeof expandedSeed === "string") {
+            return expandedSeed;
+        }
+
+        if(!expandedSeed.id){
+            throw Error("The seed does not contain an id");
+        }
+        let compactSeed = expandedSeed.id.toString('base64');
+        if (expandedSeed.endpoint) {
+            compactSeed += '|' + Buffer.from(JSON.stringify(expandedSeed.endpoint)).toString('base64');
+        }
+
+        compactSeed += expandedSeed.flag;
+        return Buffer.from(encodeURIComponent(compactSeed));
+    }
+
+    function load(compactFormSeed) {
+        if (typeof compactFormSeed === "undefined") {
+            throw new Error(`Expected type string or Buffer. Received undefined`);
+        }
+
+        if (typeof compactFormSeed !== "string") {
+            if (typeof compactFormSeed === "object" && !Buffer.isBuffer(compactFormSeed)) {
+                compactFormSeed = Buffer.from(compactFormSeed);
+            }
+
+            compactFormSeed = compactFormSeed.toString();
+        }
+
+        const decodedCompactSeed = decodeURIComponent(compactFormSeed);
+        const localSeed = {};
+        const splitCompactSeed = decodedCompactSeed.split('|');
+
+        localSeed.flag = splitCompactSeed[splitCompactSeed.length - 1];
+        localSeed.id = Buffer.from(splitCompactSeed[0], 'base64');
+
+        if (splitCompactSeed[1] && splitCompactSeed[1].length > 0) {
+            localSeed.endpoint = JSON.parse(Buffer.from(splitCompactSeed[1], 'base64').toString());
+        }
+
+        return localSeed;
+    }
+}
+
+module.exports = Seed;
+}).call(this,require("buffer").Buffer)
+
+},{"buffer":false,"pskcrypto":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/BrickTransform.js":[function(require,module,exports){
+(function (Buffer){
+function BrickTransform(transformGenerator) {
+    let directTransform;
+    let inverseTransform;
+
+    this.getTransformParameters = () => {
+        return directTransform ? directTransform.transformParameters : undefined;
+    };
+
+    this.applyDirectTransform = (data, transformParameters) => {
+        if (!directTransform) {
+            directTransform = transformGenerator.createDirectTransform(transformParameters);
+        }
+
+        if (!directTransform) {
+            return undefined;
+        }
+
+        let transformedData = directTransform.transform(data);
+
+        if(directTransform.transformParameters){
+            if (directTransform.transformParameters.iv) {
+                transformedData = Buffer.concat([transformedData, directTransform.transformParameters.iv]);
+            }
+
+            if (directTransform.transformParameters.aad) {
+                transformedData = Buffer.concat([transformedData, directTransform.transformParameters.aad]);
+            }
+
+            if (directTransform.transformParameters.tag) {
+                transformedData = Buffer.concat([transformedData, directTransform.transformParameters.tag]);
+            }
+        }
+
+        return transformedData;
+    };
+
+    this.applyInverseTransform = (data, transformParameters) => {
+        const inverseTransformParams = transformGenerator.getInverseTransformParameters(data);
+        if(inverseTransformParams.params) {
+            Object.keys(inverseTransformParams.params).forEach(param => transformParameters[param] = inverseTransformParams.params[param]);
+        }
+
+        if (!inverseTransform) {
+            inverseTransform = transformGenerator.createInverseTransform(transformParameters);
+        }
+
+        return inverseTransform ? inverseTransform.transform(inverseTransformParams.data) : undefined;
+    };
+}
+
+module.exports = BrickTransform;
+
+
+}).call(this,require("buffer").Buffer)
+
+},{"buffer":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/BrickTransformFactory.js":[function(require,module,exports){
+const CompressionGenerator = require("./CompressionGenerator");
+const EncryptionGenerator= require("./EncryptionGenerator");
+const CompressionEncryptionGenerator = require("./CompressionEncryptionGenerator");
+const BrickTransform = require("./BrickTransform");
+
+function BrickTransformFactory() {
+    this.createBrickTransform = function (config) {
+        if (!config) {
+            return;
+        }
+
+        const encryption = config.getEncryptionAlgorithm();
+        const compression = config.getCompressionAlgorithm();
+
+        let generator;
+        if (!encryption && !compression) {
+            return;
+        }
+
+        if (compression) {
+            if (encryption) {
+                generator = new CompressionEncryptionGenerator(config);
+            } else {
+                generator = new CompressionGenerator(config);
+            }
+        }else{
+            generator = new EncryptionGenerator(config);
+        }
+
+        return new BrickTransform(generator);
+    }
+}
+
+module.exports = BrickTransformFactory;
+
+
+},{"./BrickTransform":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/BrickTransform.js","./CompressionEncryptionGenerator":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/CompressionEncryptionGenerator.js","./CompressionGenerator":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/CompressionGenerator.js","./EncryptionGenerator":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/EncryptionGenerator.js"}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/CompressionEncryptionGenerator.js":[function(require,module,exports){
+const CompressionGenerator = require("./CompressionGenerator");
+const EncryptionGenerator = require("./EncryptionGenerator");
+
+function CompressionEncryptionGenerator(config) {
+    let compressionGenerator = new CompressionGenerator(config);
+    let encryptionGenerator = new EncryptionGenerator(config);
+
+    this.getInverseTransformParameters = (transformedData) => {
+        return encryptionGenerator.getInverseTransformParameters(transformedData);
+    };
+
+    this.createDirectTransform = (transformParameters) => {
+        const compression = compressionGenerator.createDirectTransform();
+        const encryption = encryptionGenerator.createDirectTransform(transformParameters);
+        const compressionEncryption = {};
+        Object.keys(encryption).forEach(key => {
+            compressionEncryption[key] = encryption[key]
+        });
+
+        compressionEncryption.transform = (data) => {
+            return encryption.transform(compression.transform(data));
+        };
+
+        return compressionEncryption;
+    };
+
+    this.createInverseTransform = (transformParameters) => {
+        const decompression = compressionGenerator.createInverseTransform();
+        const decryption = encryptionGenerator.createInverseTransform(transformParameters);
+        const compressionEncryption = {};
+        Object.keys(decompression).forEach(key => {
+            compressionEncryption[key] = decompression[key]
+        });
+        compressionEncryption.transform = (data) => {
+            return decompression.transform(decryption.transform(data));
+        };
+
+        return compressionEncryption;
+    };
+}
+
+module.exports = CompressionEncryptionGenerator;
+},{"./CompressionGenerator":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/CompressionGenerator.js","./EncryptionGenerator":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/EncryptionGenerator.js"}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/CompressionGenerator.js":[function(require,module,exports){
+const zlib = require("zlib");
+
+function CompressionGenerator(config) {
+
+    this.getInverseTransformParameters = (transformedData) => {
+        return {data: transformedData};
+    };
+
+    this.createDirectTransform = () => {
+        return getCompression(true);
+    };
+
+    this.createInverseTransform = () => {
+        return getCompression(false);
+    };
+
+    function getCompression(isCompression) {
+        const algorithm = config.getCompressionAlgorithm();
+        switch (algorithm) {
+            case "gzip":
+                return __createCompress(zlib.gzipSync, zlib.gunzipSync, isCompression);
+            case "br":
+                return __createCompress(zlib.brotliCompressSync, zlib.brotliDecompressSync, isCompression);
+            case "deflate":
+                return __createCompress(zlib.deflateSync, zlib.inflateSync, isCompression);
+            case "deflateRaw":
+                return __createCompress(zlib.deflateRawSync, zlib.inflateRawSync, isCompression);
+            default:
+                return;
+        }
+    }
+
+    function __createCompress(compress, decompress, isCompression) {
+        const options = config.getCompressionOptions();
+        if (!isCompression) {
+            return {
+                transform(data) {
+                    return decompress(data, options);
+                }
+            }
+        }
+
+        return {
+            transform(data) {
+                return compress(data, options);
+            }
+        }
+    }
+}
+
+module.exports = CompressionGenerator;
+
+
+},{"zlib":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/transforms/EncryptionGenerator.js":[function(require,module,exports){
+const crypto = require("pskcrypto");
+
+function EncryptionGenerator(config) {
+    let key;
+    const pskEncryption = crypto.createPskEncryption(config.getEncryptionAlgorithm());
+    this.setConfig = (newConfig) => {
+        config = newConfig;
+    };
+
+    this.getInverseTransformParameters = (transformedData) => {
+        let decryptionParameters = pskEncryption.getDecryptionParameters(transformedData);
+        const data = decryptionParameters.data;
+        delete decryptionParameters.data;
+        return {
+            data: data,
+            params:decryptionParameters
+        };
+    };
+
+    this.createDirectTransform = (transformParameters) => {
+        return getEncryption(transformParameters);
+    };
+
+    this.createInverseTransform = (transformParameters) => {
+        return getDecryption(transformParameters);
+    };
+
+    //--------------------------------------- internal methods ------------------------------------------------------
+    function getEncryption(transformParameters) {
+        const algorithm = config.getEncryptionAlgorithm();
+        if (!algorithm) {
+            return;
+        }
+
+        const encOptions = config.getEncryptionOptions();
+        if(transformParameters && transformParameters.key){
+            key = transformParameters.key;
+        }else{
+            key = pskEncryption.generateEncryptionKey(algorithm);
+        }
+
+
+        const ret = {
+            transform(data) {
+                const encData = pskEncryption.encrypt(data, key, encOptions);
+                ret.transformParameters = pskEncryption.getEncryptionParameters();
+                return encData;
+            }
+        };
+
+        return ret;
+    }
+
+
+    function getDecryption(transformConfig) {
+        const algorithm = config.getEncryptionAlgorithm();
+        if (!algorithm) {
+            return;
+        }
+        const encOptions = config.getEncryptionOptions();
+        let authTagLength = 0;
+        if (!config.getEncryptionOptions() || !config.getAuthTagLength()) {
+            authTagLength = 16;
+        } else {
+            authTagLength = config.getAuthTagLength();
+        }
+
+        return {
+            transform(data) {
+                return pskEncryption.decrypt(data, transformConfig.key, authTagLength, encOptions);
+            }
+        }
+    }
+
+}
+
+module.exports = EncryptionGenerator;
+},{"pskcrypto":false}],"/opt/new_swarm_engine_release/privatesky/modules/bar/utils/AsyncDispatcher.js":[function(require,module,exports){
+
+function AsyncDispatcher(finalCallback) {
+	let results = [];
+	let errors = [];
+
+	let started = 0;
+
+	function markOneAsFinished(err, res) {
+		if(err) {
+			errors.push(err);
+		}
+
+		if(arguments.length > 2) {
+			arguments[0] = undefined;
+			res = arguments;
+		}
+
+		if(typeof res !== "undefined") {
+			results.push(res);
+		}
+
+		if(--started <= 0) {
+            return callCallback();
+		}
+	}
+
+	function dispatchEmpty(amount = 1) {
+		started += amount;
+	}
+
+	function callCallback() {
+	    if(errors && errors.length === 0) {
+	        errors = undefined;
+        }
+
+	    if(results && results.length === 0) {
+	        results = undefined;
+        }
+
+        finalCallback(errors, results);
+    }
+
+	return {
+		dispatchEmpty,
+		markOneAsFinished
+	};
+}
+
+module.exports = AsyncDispatcher;
+},{}],"/opt/new_swarm_engine_release/privatesky/modules/bar/utils/isStream.js":[function(require,module,exports){
+function isStream(stream){
+    return stream !== null && typeof stream === 'object' && typeof stream.pipe === 'function';
+}
+
+function isWritable(stream) {
+    return isStream(stream) &&
+        stream.writable !== false &&
+        typeof stream._write === 'function' &&
+        typeof stream._writableState === 'object';
+
+}
+
+function isReadable(stream) {
+    return isStream(stream) &&
+        stream.readable !== false &&
+        typeof stream._read === 'function' &&
+        typeof stream._readableState === 'object';
+}
+
+function isDuplex(stream){
+    return isWritable(stream) &&
+        isReadable(stream);
+}
+
+module.exports = {
+    isStream,
+    isReadable,
+    isWritable,
+    isDuplex
+};
+
+},{}],"/opt/new_swarm_engine_release/privatesky/modules/bar/utils/utilities.js":[function(require,module,exports){
+const fs = require('fs');
+const OFFSET_SIZE = 8;
+
+function getBarMapOffsetSize() {
+    return OFFSET_SIZE;
+}
+
+function ensureFileDoesNotExist(filePath, callback) {
+    fs.access(filePath, (err) => {
+        if (!err) {
+            fs.unlink(filePath, callback);
+        } else {
+            return callback();
+        }
+    });
+}
+
+module.exports = {getBarMapOffsetSize, ensureFileDoesNotExist};
+},{"fs":false}],"/opt/new_swarm_engine_release/privatesky/modules/edfs-brick-storage/EDFSBrickQueue.js":[function(require,module,exports){
+const MAX_QUE_SUPPORTED = 100;
+const NETWORK_TIMEOUT = 1000;
+
+function EDFSBrickQueue(action, queueLimit) {
+
+    if (!Number.isInteger(queueLimit) || queueLimit > MAX_QUE_SUPPORTED) {
+        throw new Error("Que limit should be a number greater than 0 and lower than " + MAX_QUE_SUPPORTED);
+    }
+
+    let bricksQueue = [];
+    let rateLimit = queueLimit;
+    let inExecution = 0;
+
+    function executeQueue() {
+
+        if (bricksQueue.length === 0) {
+            return;
+        }
+
+        if (rateLimit === 0) {
+            rateLimit++;
+            return setTimeout(executeQueue, NETWORK_TIMEOUT);
+        }
+
+        rateLimit--;
+        let item = bricksQueue.pop();
+        let {callback, ...requestData} = item;
+        let args = Object.values(requestData);
+        inExecution++;
+        action(...args, (err, data, headers) => {
+            inExecution--;
+                if (err) {
+                    if (err.statusCode === 429) {
+                        console.log("Too many requests!");
+                        bricksQueue.push(item);
+                        setTimeout(executeQueue, NETWORK_TIMEOUT);
+                    } else {
+                        return callback(err);
+                    }
+                } else {
+                    if (typeof headers !== "undefined" && headers.hasOwnProperty("x-ratelimit-remaining")) {
+                        let remainingQuota = Number.parseInt(headers['x-ratelimit-remaining']);
+
+                        if (!isNaN(remainingQuota)) {
+
+                            rateLimit = remainingQuota;
+                            if(rateLimit > 0){
+                                let freeSlots = rateLimit-inExecution;
+                                while(freeSlots>0){
+                                    executeQueue();
+                                    freeSlots--;
+                                }
+                            }
+                            else{
+                                executeQueue();
+                            }
+
+                        }
+
+                    }
+
+                    if (callback) {
+                        callback(null, data, headers);
+                    }
+                }
+            }
+        );
+    }
+
+    this.addBrickRequest = function (url, ...args) {
+
+        let queueData = {
+            url: url
+        };
+        switch (args.length) {
+            case 1:
+                if (typeof args[0] === "object") {
+                    queueData['brickData'] = args[0];
+                } else {
+                    if (typeof args[0] === "function") {
+                        queueData['callback'] = args[0];
+                    } else {
+                        throw new Error("Invalid arguments")
+                    }
+                }
+                break;
+            case 2:
+                if (typeof args[0] !== "object") {
+                    throw new Error("Invalid brick data.")
+                }
+                if (typeof args[1] !== "function") {
+                    throw new Error("Invalid callback function.")
+                }
+                queueData['brickData'] = args[0];
+                queueData['callback'] = args[1];
+                break;
+            default:
+                throw new Error("Too many arguments.");
+        }
+
+        bricksQueue.push(queueData);
+        if (rateLimit > 0) {
+            executeQueue();
+        }
+    };
+
+    this.getQueueSize = function () {
+        return bricksQueue.length;
+    };
+
+    this.getQueueFreeSlots = function () {
+        return rateLimit;
+    };
+}
+
+module.exports = {
+    EDFSPutBrickQueue: function (limit) {
+        return new EDFSBrickQueue($$.remote.doHttpPost, limit);
+    },
+
+    EDFSGetBrickQueue: function (limit) {
+        return new EDFSBrickQueue($$.remote.doHttpGet, limit);
+    }
+};
+
+},{}],"/opt/new_swarm_engine_release/privatesky/modules/edfs-brick-storage/EDFSBrickStorage.js":[function(require,module,exports){
+require("psk-http-client");
+const bar = require("bar");
+const Brick = bar.Brick;
+let PutBrickQueue = require("./EDFSBrickQueue").EDFSPutBrickQueue;
+let GetBrickQueue = require("./EDFSBrickQueue").EDFSGetBrickQueue;
+let bricksQueue = [];
+
+function EDFSBrickStorage(urls) {
+
+    let putBrickQueue = new PutBrickQueue(30);
+    let getBrickQueue = new GetBrickQueue(30);
+
+    if (typeof urls === "string") {
+        urls = [urls]
+    }
+
+    let urlIndex = -1;
+
+    let map;
+
+    this.setBarMap = function (barMap) {
+        map = barMap;
+    };
+
+    this.putBrick = function (brick, callback) {
+        const url = getStorageUrlAddress();
+        $$.remote.doHttpPost(url + "/EDFS/" + brick.getHash(), brick.getTransformedData(), callback);
+        // putBrick(brick.getHash(), brick, true, callback);
+    };
+
+    function putBrick(brickId, brick, isSerial, callback) {
+        if (typeof isSerial === "function") {
+            callback = isSerial;
+            isSerial = undefined;
+        }
+        let callbackSent = false;
+
+        let handler = function (err, data, headers) {
+            if (!isConnectionError(err)) {
+                if (callbackSent) {
+                    if (err) {
+                        callback(err);
+                    }
+                } else {
+                    callback(err, data, headers)
+                }
+            }
+        };
+        let url = getStorageUrlAddress();
+
+        putBrickQueue.addBrickRequest(url + "/EDFS/" + brickId,
+            brick.getTransformedData(),
+            handler);
+
+        if (isSerial && putBrickQueue.getQueueFreeSlots() > 0) {
+            callbackSent = true;
+            callback();
+        }
+    }
+
+
+    this.getBrick = function (brickHash, callback) {
+        let url = getStorageUrlAddress();
+
+        $$.remote.doHttpGet(url + "/EDFS/" + brickHash, (err, brickData) => {
+            if (err) {
+                return callback(err);
+            }
+
+            const brick = new Brick();
+            brick.setTransformedData(brickData);
+            callback(undefined, brick);
+        });
+        // let brickRequest = {brickHash: brickHash, callback: callback, data: null};
+        // bricksQueue.push(brickRequest);
+        //
+        // getBrickQueue.addBrickRequest(url + "/EDFS/" + brickHash, (err, brickData) => {
+        //     brickRequest.data = {err: err, brickData: brickData};
+        //     handleBricksOrder();
+        // });
+    };
+
+    this.deleteBrick = function (brickHash, callback) {
+        throw new Error("Not implemented");
+    };
+
+    this.putBarMap = function (barMap, callback) {
+        map = barMap;
+        const barMapBrick = barMap.toBrick();
+        barMapBrick.setTransformParameters(barMap.getTransformParameters());
+
+        let brickId = barMapBrick.getId();
+        if (!brickId) {
+            brickId = barMapBrick.getHash();
+        }
+
+        barMapBrick.setId(brickId);
+        const url = getStorageUrlAddress();
+        $$.remote.doHttpPost(url + "/EDFS/" + brickId, barMapBrick.getTransformedData(), (err => callback(err, barMapBrick.getSeed())));
+        // putBrick(brickId, mapBrick, true, (err, res) => {
+        //
+        // });
+    };
+
+    this.getBarMap = function (mapDigest, callback) {
+        if (typeof mapDigest === "function") {
+            callback = mapDigest;
+            mapDigest = undefined;
+        }
+
+        if (map) {
+            return callback(undefined, map);
+        }
+
+        if (typeof mapDigest === "undefined") {
+            return callback(undefined, new bar.FolderBarMap());
+        }
+
+        this.getBrick(mapDigest, (err, mapBrick) => {
+            if (err) {
+                return callback(err);
+            }
+
+            map = new bar.FolderBarMap(mapBrick);
+            callback(undefined, map);
+        });
+    };
+
+    //------------------------------------------ internal methods ---------------------------------------------------
+    function getStorageUrlAddress() {
+        urlIndex++;
+        if (urlIndex >= urls.length) {
+            urlIndex = 0;
+        }
+        return urls[urlIndex];
+    }
+
+    function isConnectionError(err) {
+        if (err && err.code === "ECONNREFUSED") {
+            console.error("EDFS Server is unavailable! Try again later!");
+            return true;
+        }
+        return false;
+    }
+
+    function handleBricksOrder() {
+        let brickRequest = bricksQueue[0];
+        if (brickRequest && brickRequest.data) {
+            let data = brickRequest.data;
+            if (!isConnectionError(data.err)) {
+                const brick = new Brick();
+                brick.setTransformedData(data.brickData);
+                brickRequest.callback(data.err, brick);
+                bricksQueue.shift();
+                handleBricksOrder();
+            }
+
+        }
+    }
+}
+
+module.exports = {
+    createEDFSBrickStorage(url) {
+        return new EDFSBrickStorage(url);
+    }
 };
 
 
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-abstract-client.js":[function(require,module,exports){
+},{"./EDFSBrickQueue":"/opt/new_swarm_engine_release/privatesky/modules/edfs-brick-storage/EDFSBrickQueue.js","bar":"bar","psk-http-client":"psk-http-client"}],"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-abstract-client.js":[function(require,module,exports){
 let SwarmPacker = require("swarmutils").SwarmPacker;
 
 const receiveEndpoint = process.env.RECEIVE_ENDPOINT || "receive-message/";
@@ -1707,7 +3083,7 @@ function CryptoProvider(){
     }
 } */
 
-},{"swarmutils":"swarmutils"}],"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-browser-client.js":[function(require,module,exports){
+},{"swarmutils":false}],"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-browser-client.js":[function(require,module,exports){
 (function (Buffer){
 function generateMethodForRequestWithData(httpMethod) {
     return function (url, data, callback) {
@@ -2010,675 +3386,7 @@ $$.remote.base64Decode = function base64Decode(encodedString){
 
 }).call(this,require("buffer").Buffer)
 
-},{"./psk-abstract-client":"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-abstract-client.js","buffer":false,"http":false,"https":false,"url":false}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/AsyncDispatcher.js":[function(require,module,exports){
-
-function AsyncDispatcher(finalCallback) {
-	let results = [];
-	let errors = [];
-
-	let started = 0;
-
-	function markOneAsFinished(err, res) {
-		if(err) {
-			errors.push(err);
-		}
-
-		if(arguments.length > 2) {
-			arguments[0] = undefined;
-			res = arguments;
-		}
-
-		if(typeof res !== "undefined") {
-			results.push(res);
-		}
-
-		if(--started <= 0) {
-            return callCallback();
-		}
-	}
-
-	function dispatchEmpty(amount = 1) {
-		started += amount;
-	}
-
-	function callCallback() {
-	    if(errors && errors.length === 0) {
-	        errors = undefined;
-        }
-
-	    if(results && results.length === 0) {
-	        results = undefined;
-        }
-
-        finalCallback(errors, results);
-    }
-
-	return {
-		dispatchEmpty,
-		markOneAsFinished
-	};
-}
-
-module.exports = AsyncDispatcher;
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/Combos.js":[function(require,module,exports){
-function product(args) {
-    if(!args.length){
-        return [ [] ];
-    }
-    var prod = product(args.slice(1)), r = [];
-    args[0].forEach(function(x) {
-        prod.forEach(function(p) {
-            r.push([ x ].concat(p));
-        });
-    });
-    return r;
-}
-
-function objectProduct(obj) {
-    var keys = Object.keys(obj),
-        values = keys.map(function(x) { return obj[x]; });
-
-    return product(values).map(function(p) {
-        var e = {};
-        keys.forEach(function(k, n) { e[k] = p[n]; });
-        return e;
-    });
-}
-
-module.exports = objectProduct;
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/OwM.js":[function(require,module,exports){
-var meta = "meta";
-
-function OwM(serialized){
-
-    if(serialized){
-        return OwM.prototype.convert(serialized);
-    }
-
-    Object.defineProperty(this, meta, {
-        writable: false,
-        enumerable: true,
-        value: {}
-    });
-
-    Object.defineProperty(this, "setMeta", {
-        writable: false,
-        enumerable: false,
-        configurable:false,
-        value: function(prop, value){
-            if(typeof prop == "object" && typeof value == "undefined"){
-                for(var p in prop){
-                    this[meta][p] = prop[p];
-                }
-                return prop;
-            }
-            this[meta][prop] = value;
-            return value;
-        }
-    });
-
-    Object.defineProperty(this, "getMeta", {
-        writable: false,
-        value: function(prop){
-            return this[meta][prop];
-        }
-    });
-}
-
-function testOwMSerialization(obj){
-    let res = false;
-
-    if(obj){
-        res = typeof obj[meta] != "undefined" && !(obj instanceof OwM);
-    }
-
-    return res;
-}
-
-OwM.prototype.convert = function(serialized){
-    const owm = new OwM();
-
-    for(var metaProp in serialized.meta){
-        if(!testOwMSerialization(serialized[metaProp])) {
-            owm.setMeta(metaProp, serialized.meta[metaProp]);
-        }else{
-            owm.setMeta(metaProp, OwM.prototype.convert(serialized.meta[metaProp]));
-        }
-    }
-
-    for(var simpleProp in serialized){
-        if(simpleProp === meta) {
-            continue;
-        }
-
-        if(!testOwMSerialization(serialized[simpleProp])){
-            owm[simpleProp] = serialized[simpleProp];
-        }else{
-            owm[simpleProp] = OwM.prototype.convert(serialized[simpleProp]);
-        }
-    }
-
-    return owm;
-};
-
-OwM.prototype.getMetaFrom = function(obj, name){
-    var res;
-    if(!name){
-        res = obj[meta];
-    }else{
-        res = obj[meta][name];
-    }
-    return res;
-};
-
-OwM.prototype.setMetaFor = function(obj, name, value){
-    obj[meta][name] = value;
-    return obj[meta][name];
-};
-
-module.exports = OwM;
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/Queue.js":[function(require,module,exports){
-function QueueElement(content) {
-	this.content = content;
-	this.next = null;
-}
-
-function Queue() {
-	this.head = null;
-	this.tail = null;
-	this.length = 0;
-	this.push = function (value) {
-		const newElement = new QueueElement(value);
-		if (!this.head) {
-			this.head = newElement;
-			this.tail = newElement;
-		} else {
-			this.tail.next = newElement;
-			this.tail = newElement;
-		}
-		this.length++;
-	};
-
-	this.pop = function () {
-		if (!this.head) {
-			return null;
-		}
-		const headCopy = this.head;
-		this.head = this.head.next;
-		this.length--;
-
-		//fix???????
-		if(this.length === 0){
-            this.tail = null;
-		}
-
-		return headCopy.content;
-	};
-
-	this.front = function () {
-		return this.head ? this.head.content : undefined;
-	};
-
-	this.isEmpty = function () {
-		return this.head === null;
-	};
-
-	this[Symbol.iterator] = function* () {
-		let head = this.head;
-		while(head !== null) {
-			yield head.content;
-			head = head.next;
-		}
-	}.bind(this);
-}
-
-Queue.prototype.toString = function () {
-	let stringifiedQueue = '';
-	let iterator = this.head;
-	while (iterator) {
-		stringifiedQueue += `${JSON.stringify(iterator.content)} `;
-		iterator = iterator.next;
-	}
-	return stringifiedQueue;
-};
-
-Queue.prototype.inspect = Queue.prototype.toString;
-
-module.exports = Queue;
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/SwarmPacker.js":[function(require,module,exports){
-const HEADER_SIZE_RESEARVED = 4;
-
-const msgpack = require('@msgpack/msgpack');
-
-function SwarmPacker(){
-}
-
-function copyStringtoArrayBuffer(str, buffer){
-    if(typeof str !== "string"){
-        throw new Error("Wrong param type received");
-    }
-    for(var i = 0; i < str.length; i++) {
-        buffer[i] = str.charCodeAt(i);
-    }
-    return buffer;
-}
-
-function copyFromBuffer(target, source){
-    for(let i=0; i<source.length; i++){
-        target[i] = source[i];
-    }
-    return target;
-}
-
-let serializers = {};
-
-SwarmPacker.registerSerializer = function(name, implementation){
-    if(serializers[name]){
-        throw new Error("Serializer name already exists");
-    }
-    serializers[name] = implementation;
-};
-
-function getSerializer(name){
-    return serializers[name];
-}
-
-SwarmPacker.getSerializer = getSerializer;
-
-SwarmPacker.registerSerializer("json", {
-    serialize: JSON.stringify,
-    deserialize: (serialization)=>{
-        if(typeof serialization !== "string"){
-            let textDecoder = new TextDecoder();
-            serialization = textDecoder.decode(serialization);
-        }
-        return JSON.parse(serialization);
-    },
-    getType: ()=>{
-        return "json";
-    }
-});
-
-SwarmPacker.registerSerializer("msgpack", {
-    serialize: msgpack.encode,
-    deserialize: msgpack.decode,
-    getType: ()=>{
-        return "msgpack";
-    }
-});
-
-SwarmPacker.pack = function(swarm, serializer){
-
-    let jsonSerializer = getSerializer("json");
-    if(typeof serializer === "undefined"){
-        serializer = jsonSerializer;
-    }
-
-    let swarmSerialization = serializer.serialize(swarm);
-
-    let header = {
-        command: swarm.getMeta("command"),
-        swarmId : swarm.getMeta("swarmId"),
-        swarmTypeName: swarm.getMeta("swarmTypeName"),
-        swarmTarget: swarm.getMeta("target"),
-        serializationType: serializer.getType()
-    };
-
-    header = serializer.serialize(header);
-
-    if(header.length >= Math.pow(2, 32)){
-        throw new Error("Swarm serialization too big.");
-    }
-
-    //arraybuffer construction
-    let size = HEADER_SIZE_RESEARVED + header.length + swarmSerialization.length;
-    let pack = new ArrayBuffer(size);
-
-    let sizeHeaderView = new DataView(pack, 0);
-    sizeHeaderView.setUint32(0, header.length);
-
-    let headerView = new Uint8Array(pack, HEADER_SIZE_RESEARVED);
-    copyStringtoArrayBuffer(header, headerView);
-
-    let serializationView = new Uint8Array(pack, HEADER_SIZE_RESEARVED+header.length);
-    if(typeof swarmSerialization === "string"){
-        copyStringtoArrayBuffer(swarmSerialization, serializationView);
-    }else{
-        copyFromBuffer(serializationView, swarmSerialization);
-    }
-
-    return pack;
-};
-
-SwarmPacker.unpack = function(pack){
-    let jsonSerialiser = SwarmPacker.getSerializer("json");
-    let headerSerialization = getHeaderSerializationFromPack(pack);
-    let header = jsonSerialiser.deserialize(headerSerialization);
-
-    let serializer = SwarmPacker.getSerializer(header.serializationType);
-    let messageView = new Uint8Array(pack, HEADER_SIZE_RESEARVED+headerSerialization.length);
-
-    let swarm = serializer.deserialize(messageView);
-    return swarm;
-};
-
-function getHeaderSerializationFromPack(pack){
-    let headerSize = new DataView(pack).getUint32(0);
-
-    let headerView = new Uint8Array(pack, HEADER_SIZE_RESEARVED, headerSize);
-    return headerView;
-}
-
-SwarmPacker.getHeader = function(pack){
-    let jsonSerialiser = SwarmPacker.getSerializer("json");
-    let header = jsonSerialiser.deserialize(getHeaderSerializationFromPack(pack));
-
-    return header;
-};
-module.exports = SwarmPacker;
-},{"@msgpack/msgpack":false}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/beesHealer.js":[function(require,module,exports){
-const OwM = require("./OwM");
-
-/*
-    Prepare the state of a swarm to be serialised
-*/
-
-exports.asJSON = function(valueObj, phaseName, args, callback){
-
-        let valueObject = valueObj.valueOf();
-        let res = new OwM();
-        res.publicVars          = valueObject.publicVars;
-        res.privateVars         = valueObject.privateVars;
-
-        res.setMeta("COMMAND_ARGS",        OwM.prototype.getMetaFrom(valueObject, "COMMAND_ARGS"));
-        res.setMeta("SecurityParadigm",        OwM.prototype.getMetaFrom(valueObject, "SecurityParadigm"));
-        res.setMeta("swarmTypeName", OwM.prototype.getMetaFrom(valueObject, "swarmTypeName"));
-        res.setMeta("swarmId",       OwM.prototype.getMetaFrom(valueObject, "swarmId"));
-        res.setMeta("target",        OwM.prototype.getMetaFrom(valueObject, "target"));
-        res.setMeta("homeSecurityContext",        OwM.prototype.getMetaFrom(valueObject, "homeSecurityContext"));
-        res.setMeta("requestId",        OwM.prototype.getMetaFrom(valueObject, "requestId"));
-
-
-        if(!phaseName){
-            res.setMeta("command", "stored");
-        } else {
-            res.setMeta("phaseName", phaseName);
-            res.setMeta("phaseId", $$.uidGenerator.safe_uuid());
-            res.setMeta("args", args);
-            res.setMeta("command", OwM.prototype.getMetaFrom(valueObject, "command") || "executeSwarmPhase");
-        }
-
-        res.setMeta("waitStack", valueObject.meta.waitStack); //TODO: think if is not better to be deep cloned and not referenced!!!
-
-        if(callback){
-            return callback(null, res);
-        }
-        //console.log("asJSON:", res, valueObject);
-        return res;
-};
-
-exports.jsonToNative = function(serialisedValues, result){
-
-    for(let v in serialisedValues.publicVars){
-        result.publicVars[v] = serialisedValues.publicVars[v];
-
-    };
-    for(let l in serialisedValues.privateVars){
-        result.privateVars[l] = serialisedValues.privateVars[l];
-    };
-
-    for(let i in OwM.prototype.getMetaFrom(serialisedValues)){
-        OwM.prototype.setMetaFor(result, i, OwM.prototype.getMetaFrom(serialisedValues, i));
-    };
-
-};
-},{"./OwM":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/OwM.js"}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/pskconsole.js":[function(require,module,exports){
-var commands = {};
-var commands_help = {};
-
-//global function addCommand
-addCommand = function addCommand(verb, adverbe, funct, helpLine){
-    var cmdId;
-    if(!helpLine){
-        helpLine = " ";
-    } else {
-        helpLine = " " + helpLine;
-    }
-    if(adverbe){
-        cmdId = verb + " " +  adverbe;
-        helpLine = verb + " " +  adverbe + helpLine;
-    } else {
-        cmdId = verb;
-        helpLine = verb + helpLine;
-    }
-    commands[cmdId] = funct;
-        commands_help[cmdId] = helpLine;
-};
-
-function doHelp(){
-    console.log("List of commands:");
-    for(var l in commands_help){
-        console.log("\t", commands_help[l]);
-    }
-}
-
-addCommand("-h", null, doHelp, "\t\t\t\t\t\t |just print the help");
-addCommand("/?", null, doHelp, "\t\t\t\t\t\t |just print the help");
-addCommand("help", null, doHelp, "\t\t\t\t\t\t |just print the help");
-
-
-function runCommand(){
-  var argv = Object.assign([], process.argv);
-  var cmdId = null;
-  var cmd = null;
-  argv.shift();
-  argv.shift();
-
-  if(argv.length >=1){
-      cmdId = argv[0];
-      cmd = commands[cmdId];
-      argv.shift();
-  }
-
-
-  if(!cmd && argv.length >=1){
-      cmdId = cmdId + " " + argv[0];
-      cmd = commands[cmdId];
-      argv.shift();
-  }
-
-  if(!cmd){
-    if(cmdId){
-        console.log("Unknown command: ", cmdId);
-    }
-    cmd = doHelp;
-  }
-
-  cmd.apply(null,argv);
-
-}
-
-module.exports = {
-    runCommand
-};
-
-
-},{}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/safe-uuid.js":[function(require,module,exports){
-
-function encode(buffer) {
-    return buffer.toString('base64')
-        .replace(/\+/g, '')
-        .replace(/\//g, '')
-        .replace(/=+$/, '');
-};
-
-function stampWithTime(buf, salt, msalt){
-    if(!salt){
-        salt = 1;
-    }
-    if(!msalt){
-        msalt = 1;
-    }
-    var date = new Date;
-    var ct = Math.floor(date.getTime() / salt);
-    var counter = 0;
-    while(ct > 0 ){
-        //console.log("Counter", counter, ct);
-        buf[counter*msalt] = Math.floor(ct % 256);
-        ct = Math.floor(ct / 256);
-        counter++;
-    }
-}
-
-/*
-    The uid contains around 256 bits of randomness and are unique at the level of seconds. This UUID should by cryptographically safe (can not be guessed)
-
-    We generate a safe UID that is guaranteed unique (by usage of a PRNG to geneate 256 bits) and time stamping with the number of seconds at the moment when is generated
-    This method should be safe to use at the level of very large distributed systems.
-    The UUID is stamped with time (seconds): does it open a way to guess the UUID? It depends how safe is "crypto" PRNG, but it should be no problem...
-
- */
-
-var generateUid = null;
-
-
-exports.init = function(externalGenerator){
-    generateUid = externalGenerator.generateUid;
-    return module.exports;
-};
-
-exports.safe_uuid = function() {
-    var buf = generateUid(32);
-    stampWithTime(buf, 1000, 3);
-    return encode(buf);
-};
-
-
-
-/*
-    Try to generate a small UID that is unique against chance in the same millisecond second and in a specific context (eg in the same choreography execution)
-    The id contains around 6*8 = 48  bits of randomness and are unique at the level of milliseconds
-    This method is safe on a single computer but should be used with care otherwise
-    This UUID is not cryptographically safe (can be guessed)
- */
-exports.short_uuid = function(callback) {
-    require('crypto').randomBytes(12, function (err, buf) {
-        if (err) {
-            callback(err);
-            return;
-        }
-        stampWithTime(buf,1,2);
-        callback(null, encode(buf));
-    });
-};
-},{"crypto":false}],"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/uidGenerator.js":[function(require,module,exports){
-(function (Buffer){
-const crypto = require('crypto');
-const Queue = require("./Queue");
-var PSKBuffer = typeof $$ !== "undefined" && $$.PSKBuffer ? $$.PSKBuffer : Buffer;
-
-function UidGenerator(minBuffers, buffersSize) {
-	var buffers = new Queue();
-	var lowLimit = .2;
-
-	function fillBuffers(size){
-		//notifyObserver();
-		const sz = size || minBuffers;
-		if(buffers.length < Math.floor(minBuffers*lowLimit)){
-			for(var i=0+buffers.length; i < sz; i++){
-				generateOneBuffer(null);
-			}
-		}
-	}
-
-	fillBuffers();
-
-	function generateOneBuffer(b){
-		if(!b){
-			b = PSKBuffer.alloc(0);
-		}
-		const sz = buffersSize - b.length;
-		/*crypto.randomBytes(sz, function (err, res) {
-			buffers.push(Buffer.concat([res, b]));
-			notifyObserver();
-		});*/
-		buffers.push(PSKBuffer.concat([ crypto.randomBytes(sz), b ]));
-		notifyObserver();
-	}
-
-	function extractN(n){
-		var sz = Math.floor(n / buffersSize);
-		var ret = [];
-
-		for(var i=0; i<sz; i++){
-			ret.push(buffers.pop());
-			setTimeout(generateOneBuffer, 1);
-		}
-
-
-
-		var remainder = n % buffersSize;
-		if(remainder > 0){
-			var front = buffers.pop();
-			ret.push(front.slice(0,remainder));
-			//generateOneBuffer(front.slice(remainder));
-			setTimeout(function(){
-				generateOneBuffer(front.slice(remainder));
-			},1);
-		}
-
-		//setTimeout(fillBuffers, 1);
-
-		return Buffer.concat(ret);
-	}
-
-	var fillInProgress = false;
-
-	this.generateUid = function(n){
-		var totalSize = buffers.length * buffersSize;
-		if(n <= totalSize){
-			return extractN(n);
-		} else {
-			if(!fillInProgress){
-				fillInProgress = true;
-				setTimeout(function(){
-					fillBuffers(Math.floor(minBuffers*2.5));
-					fillInProgress = false;
-				}, 1);
-			}
-			return crypto.randomBytes(n);
-		}
-	};
-
-	var observer;
-	this.registerObserver = function(obs){
-		if(observer){
-			console.error(new Error("One observer allowed!"));
-		}else{
-			if(typeof obs == "function"){
-				observer = obs;
-				//notifyObserver();
-			}
-		}
-	};
-
-	function notifyObserver(){
-		if(observer){
-			var valueToReport = buffers.length*buffersSize;
-			setTimeout(function(){
-				observer(null, {"size": valueToReport});
-			}, 10);
-		}
-	}
-}
-
-module.exports.createUidGenerator = function (minBuffers, bufferSize) {
-	return new UidGenerator(minBuffers, bufferSize);
-};
-
-}).call(this,require("buffer").Buffer)
-
-},{"./Queue":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/Queue.js","buffer":false,"crypto":false}],"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/array-set.js":[function(require,module,exports){
+},{"./psk-abstract-client":"/opt/new_swarm_engine_release/privatesky/modules/psk-http-client/lib/psk-abstract-client.js","buffer":false,"http":false,"https":false,"url":false}],"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/array-set.js":[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -5658,7 +6366,28 @@ function compareByGeneratedPositionsInflated(mappingA, mappingB) {
 }
 exports.compareByGeneratedPositionsInflated = compareByGeneratedPositionsInflated;
 
-},{}],"buffer-from":[function(require,module,exports){
+},{}],"bar-fs-adapter":[function(require,module,exports){
+module.exports.createFsAdapter = () => {
+    const FsAdapter = require("./lib/FsAdapter");
+    return new FsAdapter();
+};
+},{"./lib/FsAdapter":"/opt/new_swarm_engine_release/privatesky/modules/bar-fs-adapter/lib/FsAdapter.js"}],"bar":[function(require,module,exports){
+
+const ArchiveConfigurator = require("./lib/ArchiveConfigurator");
+const createFolderBrickStorage = require("./lib/FolderBrickStorage").createFolderBrickStorage;
+const createFileBrickStorage = require("./lib/FileBrickStorage").createFileBrickStorage;
+
+ArchiveConfigurator.prototype.registerStorageProvider("FolderBrickStorage", createFolderBrickStorage);
+ArchiveConfigurator.prototype.registerStorageProvider("FileBrickStorage", createFileBrickStorage);
+
+module.exports.ArchiveConfigurator = ArchiveConfigurator;
+module.exports.Brick = require("./lib/Brick");
+module.exports.Archive = require("./lib/Archive");
+module.exports.FolderBarMap = require("./lib/FolderBarMap");
+module.exports.createFolderBrickStorage = createFolderBrickStorage;
+module.exports.createFileBrickStorage = createFileBrickStorage;
+
+},{"./lib/Archive":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Archive.js","./lib/ArchiveConfigurator":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/ArchiveConfigurator.js","./lib/Brick":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/Brick.js","./lib/FileBrickStorage":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/FileBrickStorage.js","./lib/FolderBarMap":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/FolderBarMap.js","./lib/FolderBrickStorage":"/opt/new_swarm_engine_release/privatesky/modules/bar/lib/FolderBrickStorage.js"}],"buffer-from":[function(require,module,exports){
 (function (Buffer){
 var toString = Object.prototype.toString
 
@@ -5732,50 +6461,11 @@ module.exports = bufferFrom
 
 }).call(this,require("buffer").Buffer)
 
-},{"buffer":false}],"foldermq":[function(require,module,exports){
-module.exports = {
-					createQue: require("./lib/folderMQ").getFolderQueue
-					//folderMQ: require("./lib/folderMQ")
-};
-},{"./lib/folderMQ":"/opt/new_swarm_engine_release/privatesky/modules/foldermq/lib/folderMQ.js"}],"interact":[function(require,module,exports){
-/*
-Module that offers APIs to interact with PrivateSky web sandboxes
- */
+},{"buffer":false}],"edfs-brick-storage":[function(require,module,exports){
+const createEDFSBrickStorage = require("./EDFSBrickStorage").createEDFSBrickStorage;
+module.exports.createEDFSBrickStorage = createEDFSBrickStorage;
 
-
-const exportBrowserInteract = {
-    enableIframeInteractions: function () {
-        module.exports.createWindowMQ = require("./lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ").createMQ;
-        module.exports.createWindowInteractionSpace = require("./lib/interactionSpaceImpl/WindowMQInteractionSpace").createInteractionSpace;
-    },
-    enableReactInteractions: function () {
-        module.exports.createWindowMQ = require("./lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ").createMQ;
-        module.exports.createWindowInteractionSpace = require("./lib/interactionSpaceImpl/WindowMQInteractionSpace").createInteractionSpace;
-    },
-    enableWebViewInteractions:function(){
-        module.exports.createWindowInteractionSpace = require("./lib/interactionSpaceImpl/WebViewMQInteractionSpace").createInteractionSpace;
-        module.exports.createWindowMQ = require("./lib/interactionSpaceImpl/specificMQImpl/ChildWebViewMQ").createMQ;
-    },
-    enableLocalInteractions: function () {
-        module.exports.createInteractionSpace = require("./lib/interactionSpaceImpl/SoundPubSubMQBasedInteractionSpace").createInteractionSpace;
-    },
-    enableRemoteInteractions: function () {
-        module.exports.createRemoteInteractionSpace = require('./lib/interactionSpaceImpl/httpInteractionSpace').createInteractionSpace;
-    }
-};
-
-
-if (typeof navigator !== "undefined") {
-    module.exports = exportBrowserInteract;
-}
-else {
-    module.exports = {
-        createNodeInteractionSpace: require("./lib/interactionSpaceImpl/folderMQBasedInteractionSpace").createInteractionSpace,
-        createInteractionSpace: require("./lib/interactionSpaceImpl/SoundPubSubMQBasedInteractionSpace").createInteractionSpace,
-        createRemoteInteractionSpace: require('./lib/interactionSpaceImpl/httpInteractionSpace').createInteractionSpace
-    };
-}
-},{"./lib/interactionSpaceImpl/SoundPubSubMQBasedInteractionSpace":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/SoundPubSubMQBasedInteractionSpace.js","./lib/interactionSpaceImpl/WebViewMQInteractionSpace":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/WebViewMQInteractionSpace.js","./lib/interactionSpaceImpl/WindowMQInteractionSpace":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/WindowMQInteractionSpace.js","./lib/interactionSpaceImpl/folderMQBasedInteractionSpace":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/folderMQBasedInteractionSpace.js","./lib/interactionSpaceImpl/httpInteractionSpace":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/httpInteractionSpace.js","./lib/interactionSpaceImpl/specificMQImpl/ChildWebViewMQ":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWebViewMQ.js","./lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ":"/opt/new_swarm_engine_release/privatesky/modules/interact/lib/interactionSpaceImpl/specificMQImpl/ChildWndMQ.js"}],"psk-http-client":[function(require,module,exports){
+},{"./EDFSBrickStorage":"/opt/new_swarm_engine_release/privatesky/modules/edfs-brick-storage/EDFSBrickStorage.js"}],"psk-http-client":[function(require,module,exports){
 //to look nice the requireModule on Node
 require("./lib/psk-abstract-client");
 if(!$$.browserRuntime){
@@ -6362,37 +7052,5 @@ exports.SourceMapGenerator = require('./lib/source-map-generator').SourceMapGene
 exports.SourceMapConsumer = require('./lib/source-map-consumer').SourceMapConsumer;
 exports.SourceNode = require('./lib/source-node').SourceNode;
 
-},{"./lib/source-map-consumer":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-map-consumer.js","./lib/source-map-generator":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-map-generator.js","./lib/source-node":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-node.js"}],"swarmutils":[function(require,module,exports){
-(function (global){
-module.exports.OwM = require("./lib/OwM");
-module.exports.beesHealer = require("./lib/beesHealer");
-
-const uidGenerator = require("./lib/uidGenerator").createUidGenerator(200, 32);
-
-module.exports.safe_uuid = require("./lib/safe-uuid").init(uidGenerator);
-
-module.exports.Queue = require("./lib/Queue");
-module.exports.combos = require("./lib/Combos");
-
-module.exports.uidGenerator = uidGenerator;
-module.exports.generateUid = uidGenerator.generateUid;
-module.exports.AsyncDispatcher = require("./lib/AsyncDispatcher");
-module.exports.SwarmPacker = require("./lib/SwarmPacker");
-
-module.exports.createPskConsole = function () {
-  return require('./lib/pskconsole');
-};
-
-
-if(typeof global.$$ == "undefined"){
-  global.$$ = {};
-}
-
-if(typeof global.$$.uidGenerator == "undefined"){
-    $$.uidGenerator = module.exports.safe_uuid;
-}
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"./lib/AsyncDispatcher":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/AsyncDispatcher.js","./lib/Combos":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/Combos.js","./lib/OwM":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/OwM.js","./lib/Queue":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/Queue.js","./lib/SwarmPacker":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/SwarmPacker.js","./lib/beesHealer":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/beesHealer.js","./lib/pskconsole":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/pskconsole.js","./lib/safe-uuid":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/safe-uuid.js","./lib/uidGenerator":"/opt/new_swarm_engine_release/privatesky/modules/swarmutils/lib/uidGenerator.js"}]},{},["/opt/new_swarm_engine_release/privatesky/builds/tmp/httpinteract_intermediar.js"])
-//# sourceMappingURL=httpinteract.js.map
+},{"./lib/source-map-consumer":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-map-consumer.js","./lib/source-map-generator":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-map-generator.js","./lib/source-node":"/opt/new_swarm_engine_release/privatesky/node_modules/source-map/lib/source-node.js"}]},{},["/opt/new_swarm_engine_release/privatesky/builds/tmp/edfsBar_intermediar.js"])
+//# sourceMappingURL=edfsBar.js.map
