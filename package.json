@@ -41,5 +41,6 @@
     "run-tests": "npm run build && node bin/scripts/testrunner.js",
     "cmd": "node bin//terminal.js",
     "build": "node scripts/builder.js"
-  }
+  },
+  "main": "index.js"
 }

@@ -2831,7 +2831,7 @@ const sharedPhases = require('./sharedPhases');
 
 $$.transaction.describe("Domain", {
     add: function (alias, role, workspace, constitution, localInterface) {
-        let domain = this.transaction.lookup("DomainReference", alias);
+        let domain = $$.blockchain.lookup("DomainReference", alias);
 
         if(!domain){
             domain = this.transaction.createAsset("DomainReference", "init", role, alias);
@@ -2855,39 +2855,39 @@ $$.transaction.describe("Domain", {
         this.commit();
     },
     connectDomainLocally: function(alias, localInterface){
-        let domain = this.transaction.lookup("DomainReference", alias);
+        let domain = $$.blockchain.lookup("DomainReference", alias);
         domain.addLocalInterface('local', localInterface);
 
         this.transaction.add(domain);
         this.commit();
     },
     setWorkspaceForDomain: function(alias, workspace){
-        let domain = this.transaction.lookup("DomainReference", alias);
+        let domain = $$.blockchain.lookup("DomainReference", alias);
         domain.setWorkspace(workspace);
 
         this.transaction.add(domain);
         this.commit();
     },
     setConstitutionForDomain: function(alias, constitution){
-        let domain = this.transaction.lookup("DomainReference", alias);
+        let domain = $$.blockchain.lookup("DomainReference", alias);
         domain.setConstitution(constitution);
 
         this.transaction.add(domain);
         this.commit();
     },
     getDomainDetails:function(alias){
-        let domain = this.transaction.lookup("DomainReference", alias);
+        let domain = $$.blockchain.lookup("DomainReference", alias);
         return domain.toJson();
     },
     connectDomainToRemote(domainName, alias, remoteEndPoint){
-        let domain = this.transaction.lookup("DomainReference", domainName);
+        let domain = $$.blockchain.lookup("DomainReference", domainName);
         domain.addRemoteInterface(alias, remoteEndPoint);
 
         this.transaction.add(domain);
         this.commit();
     },
     setWorkerStrategy: function (alias, workerStrategy) {
-        const domainReference =  this.transaction.lookup("DomainReference", alias);
+        const domainReference =  $$.blockchain.lookup("DomainReference", alias);
         if(!domainReference) {
             $$.exception(`Domain with alias ${alias} does not exist!`);
         }
@@ -2898,7 +2898,7 @@ $$.transaction.describe("Domain", {
         this.commit();
     },
     setMaximumNumberOfWorkers: function (alias, maximumNumberOfWorkers) {
-        const domainReference =  this.transaction.lookup("DomainReference", alias);
+        const domainReference =  $$.blockchain.lookup("DomainReference", alias);
         if(!domainReference) {
             $$.exception(`Domain with alias ${alias} does not exist!`);
         }
@@ -2985,7 +2985,7 @@ $$.transaction.describe("transactions", {
         $$.blockchain.persist(this.transaction);
     },
     updateAgent: function (alias, publicKey) {
-        let agent = this.transaction.lookup("Agent", alias);
+        let agent = $$.blockchain.lookup("Agent", alias);
         agent.update(publicKey);
         this.transaction.save(agent);
         $$.blockchain.persist(this.transaction);
