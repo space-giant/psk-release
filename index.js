@@ -12,8 +12,21 @@ let signatureProvider = blockchain.createSignatureProvider("permissive");
 blockchain.createBlockchain(worldStateCache, historyStorage, consensusAlgorithm, signatureProvider, false, false);
 
 function start() {
-  $$.blockchain.start(() => {
-    require("./constitution");
+  return new Promise((resolve, reject) => {
+    try {
+      $$.blockchain.start(() => {
+        try {
+          require("./constitution");
+          resolve();
+        } catch (err) {
+          console.error("Error starting blockchain", err);
+          reject(err);
+        }
+      });
+    } catch (err) {
+      console.error("Error starting blockchain", err);
+      reject(err);
+    }
   });
 }
 
