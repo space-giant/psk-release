@@ -1,19 +1,17 @@
 require("./psknode/bundles/pskruntime");
 require("./psknode/bundles/psknode");
-
-const confDir = "./blockchain_local_storage";
 let blockchain = require("blockchain");
 
-let worldStateCache = blockchain.createWorldStateCache("fs", confDir);
-let historyStorage = blockchain.createHistoryStorage("fs", confDir);
-let consensusAlgorithm = blockchain.createConsensusAlgorithm("direct");
-let signatureProvider = blockchain.createSignatureProvider("permissive");
-
-blockchain.createBlockchain(worldStateCache, historyStorage, consensusAlgorithm, signatureProvider, false, false);
-
-function start() {
+function start({ confDir = "./blockchain_local_storage" }) {
   return new Promise((resolve, reject) => {
     try {
+      let worldStateCache = blockchain.createWorldStateCache("fs", confDir);
+      let historyStorage = blockchain.createHistoryStorage("fs", confDir);
+      let consensusAlgorithm = blockchain.createConsensusAlgorithm("direct");
+      let signatureProvider = blockchain.createSignatureProvider("permissive");
+
+      blockchain.createBlockchain(worldStateCache, historyStorage, consensusAlgorithm, signatureProvider, false, false);
+
       $$.blockchain.start(() => {
         try {
           require("./constitution");
