@@ -32,7 +32,7 @@ $$.transaction.describe("TokenManagement", {
       );
     }
 
-    newToken = this.transaction.createAsset("Wallet", "init", walletAlias, token, owner);
+    wallet = this.transaction.createAsset("Wallet", "init", walletAlias, token, owner);
 
     wallet.receive(supply);
 

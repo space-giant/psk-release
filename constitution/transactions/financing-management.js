@@ -151,7 +151,7 @@ $$.transaction.describe("FinancingManagement", {
     }
 
     let sharesWallet = $$.blockchain.lookup("Wallet", sharesWalletAlias);
-    if (sharesToken) {
+    if (sharesWallet) {
       return callTxException(
         `Owner ${owner} cannot create wallet for token ${sharesToken} because generated wallet address (${sharesWalletAlias}) is already in use!`
       );
