@@ -139,7 +139,7 @@ $$.transaction.describe("FinancingManagement", {
 
     let sharesToken = $$.uidGenerator.safe_uuid();
     let newToken = $$.blockchain.lookup("Token", sharesToken);
-    if (newToken) return callTxException(`Token ${token} already exists!`);
+    if (newToken) return callTxException(`Token ${newToken} already exists!`);
 
     newToken = this.transaction.createAsset("Token", "init", sharesToken, tokenInfo.name, tokenInfo.symbol, owner);
 
@@ -216,7 +216,7 @@ $$.transaction.describe("FinancingManagement", {
 
       onResult();
     } catch (err) {
-      return tcallTxException(`Financing ${financingAlias} failed to be stoped!`, err);
+      return callTxException(`Financing ${financingAlias} failed to be stoped!`, err);
     }
   },
 
